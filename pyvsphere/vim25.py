@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 #
-# Python interface to VMware VIM API
+# Python interface to VMware vSphere API
 #
+import httplib
 import time
 import suds
 
@@ -52,8 +53,11 @@ class Vim(object):
         return self.soapclient.factory.create("ns0:%s" % object_type)
 
     def invoke(self, method, **kwargs):
-        return getattr(self.soapclient.service, method)(**kwargs)
-
+        try:
+            return getattr(self.soapclient.service, method)(**kwargs)
+        except httplib.BadStatusLine:
+            return False
+            
     def invoke_task(self, method, **kwargs):
         """
         Execute a task and poll until it completes or times out
@@ -132,8 +136,8 @@ class Vim(object):
         object_contents = self.invoke('RetrieveProperties',
                                           _this=self.property_collector,
                                           specSet=pfs)
-        assert len(object_contents) == len(objects), \
-            "got different number of  ObjectContent responses (%d) than expected (%d)" % (len(object_contents), len(objects))
+        if not object_contents or len(object_contents) != len(objects):
+            return False, objects
         for object_content in object_contents:
             updated_object = ManagedObject(mor=object_content.obj, vim=self)
             for prop in object_content.propSet:
@@ -143,7 +147,7 @@ class Vim(object):
                 else:
                     setattr(updated_object, prop.name, prop.val)
             updated_objects[object_map[object_content.obj.value]] = updated_object
-        return updated_objects
+        return True, updated_objects
                     
     def login(self, username, password):
         self.invoke('Login', _this=self.service_content.sessionManager,
@@ -274,6 +278,8 @@ class ManagedObject(object):
         object_contents = self.vim.invoke('RetrieveProperties',
                                           _this=self.vim.property_collector,
                                           specSet=pfs)
+        if not object_contents:
+            return False
         assert len(object_contents) == 1, "got multiple ObjectContent responses"
         if object_contents:
             for prop in object_contents[0].propSet:
