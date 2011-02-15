@@ -28,16 +28,19 @@ class Vim(object):
     """
     Interface class for VMware VIM API over SOAP
     """
-    def __init__(self, url, debug=True):
+    def __init__(self, url, debug=False):
         """
         @param url: URL to the vSphere server (eg.: https://foosphere/sdk)
         @param debug: Run in debug mode (very noisy)
         """
         import logging
-        self.task_timeout = 600 
+        self.task_timeout = 600
         if debug:
             logging.basicConfig(level=logging.INFO)
             logging.getLogger('suds.client').setLevel(logging.DEBUG)
+        else:
+            logging.basicConfig(level=logging.INFO)
+            logging.getLogger('suds').setLevel(logging.INFO)
 
         self.soapclient = suds.client.Client(url+"/vimService.wsdl")
         self.soapclient.set_options(location=url)
@@ -57,7 +60,7 @@ class Vim(object):
             return getattr(self.soapclient.service, method)(**kwargs)
         except httplib.BadStatusLine:
             return False
-            
+
     def invoke_task(self, method, **kwargs):
         """
         Execute a task and poll until it completes or times out
@@ -97,7 +100,7 @@ class Vim(object):
                 raise TaskFailed(error=task.info.error.localizedMessage)
             time.sleep(1)
             if time.time()-start_time > self.task_timeout:
-                raise TimeoutError, "task timed out after %d seconds" % self.tas 
+                raise TimeoutError, "task timed out after %d seconds" % self.tas
 
     def update_many_objects(self, objects):
         """
@@ -148,20 +151,22 @@ class Vim(object):
                     setattr(updated_object, prop.name, prop.val)
             updated_objects[object_map[object_content.obj.value]] = updated_object
         return True, updated_objects
-                    
+
     def login(self, username, password):
         self.invoke('Login', _this=self.service_content.sessionManager,
                     userName=username, password=password)
 
     def logout(self):
         self.invoke('Logout', _this=self.service_content.sessionManager)
-        
-    def find_entities_by_type(self, entity_type):
+
+    def find_entities_by_type(self, entity_type, properties=None):
         # Prop spec
         propspec = self.create_object('PropertySpec')
         propspec.type = entity_type
         propspec.all = False
         propspec.pathSet = ['name']
+        if properties:
+            propspec.pathSet.extend(properties)
         # Obj spec
         objspec = self.create_object('ObjectSpec')
         objspec.obj = self.service_content.rootFolder
@@ -176,8 +181,8 @@ class Vim(object):
                              specSet=propfilterspec)
         return result
 
-    def find_entity_by_name(self, entity_type, entity_name):
-        entities = self.find_entities_by_type(entity_type)
+    def find_entity_by_name(self, entity_type, entity_name, properties=None):
+        entities = self.find_entities_by_type(entity_type, properties=properties)
         for e in entities:
             for x in e.propSet:
                 found = [x for x in e.propSet if x.name == 'name' and x.val == entity_name]
@@ -185,11 +190,16 @@ class Vim(object):
                 return e
         return None
 
-    def find_vm_by_name(self, vmname):
-        vm_entity = self.find_entity_by_name('VirtualMachine', vmname)
+    def find_vm_by_name(self, vmname, properties=None):
+        vm_entity = self.find_entity_by_name('VirtualMachine', vmname, properties=properties)
         if vm_entity:
             vm = VirtualMachine(vm_entity.obj, self)
-            vm.name = vmname
+            for prop in vm_entity.propSet:
+                if prop.val.__class__.__name__.startswith('Array'):
+                    # suds embeds Array-type data into lists
+                    setattr(vm, prop.name, prop.val[0])
+                else:
+                    setattr(vm, prop.name, prop.val)
             return vm
         else:
             return None
@@ -321,7 +331,7 @@ class VirtualMachine(ManagedObject):
         @notes: The clone is created on the same data store and host as its parent
         """
         return self.vim.wait_for_task(self.clone_vm_task(clonename, linked_clone))
-        
+
     def clone_vm_task(self, clonename=None, linked_clone=False):
         """
         Create a full or linked clone of the VM
