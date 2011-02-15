@@ -292,17 +292,22 @@ class ManagedObject(object):
         else:
             return False
 
-            
+
 class VirtualMachine(ManagedObject):
+    def power_state(self):
+        if not getattr(self, 'summary'):
+            self.update_local_view(['summary'])
+        return self.summary.runtime.powerState
+
     def power_on(self):
         return self.vim.wait_for_task(self.power_on_task())
-    
+
     def power_on_task(self):
         return ManagedObject(self.vim.invoke('PowerOnVM_Task', _this=self.mor), vim=self.vim)
 
     def power_off(self):
         return self.vim.wait_for_task(self.power_off_task())
-    
+
     def power_off_task(self):
             return ManagedObject(self.vim.invoke('PowerOffVM_Task', _this=self.mor), vim=self.vim)
 
