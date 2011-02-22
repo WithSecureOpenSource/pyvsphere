@@ -15,7 +15,7 @@ def test(vim, options):
     print vm.summary
     if vm.snapshot.rootSnapshotList:
         print vm.snapshot.rootSnapshotList[0].name
-    
+
 def clone_vms(vim, options):
     def prepare_clone(vm, clonename, nuke_old=False):
         def done(task):
@@ -40,7 +40,7 @@ def clone_vms(vim, options):
                 while not done(task):
                     task = (yield task)
                 print "CLONE(%s) DELETE DONE" % clonename
-                
+
         print "CLONE(%s) CLONE STARTING" % clonename
         task = vm.clone_vm_task(clonename, linked_clone=False)
         while not done(task):
@@ -136,46 +136,6 @@ def revert(vim, options):
     vm = vim.find_vm_by_name(options.vm_name)
     vm.revert_to_current_snapshot()
 
-def update_ips(vim, options):
-    """ This is a hack for demo purposes """
-    import dns.update
-    import dns.query
-    import dns.tsigkeyring
-
-    keyring = dns.tsigkeyring.from_text({
-    'dhcpupdate' : 'InAEdGXX4cnVdhpLWi1JzBo5EX0Mk1CXmnGH4hsuRzptjn5GmK92fpk22o+cQyLeu80FD9iU9JAeZeMg2dRbyA=='
-    })
-
-    clones = [vim.find_vm_by_name(options.vm_name+"-%d" % x) for x in range(options.count)]
-    # Update all the clones once
-    map(lambda x: x.update_local_view(['name', 'summary']), clones)
-
-    waiting_for_ips = True
-    while waiting_for_ips:
-        print "-" * 40
-        have_it_all = True
-        # Update the empty ones
-        for clone in [clone for clone in clones if not getattr(clone.summary.guest, 'ipAddress', None)]:
-            clone.update_local_view(['name', 'summary'])
-        have_it_all = True
-        for clone in clones:
-            ip_address = getattr(clone.summary.guest, 'ipAddress', None)
-            if not ip_address:
-                have_it_all = False
-            print clone.name, ip_address if ip_address else "<NO IP ASSIGNED YET>"
-        if have_it_all:
-            break
-
-    for clone in clones:
-        print "UPDATING", clone.name
-        host_name = clone.name
-        host_ip = getattr(clone.summary.guest, 'ipAddress', '192.168.1.100') 
-        print host_name, host_ip, len(host_ip)
-        update = dns.update.Update('fsio.f-secure.com.', keyring=keyring)
-        update.replace(host_name, 300, 'A', str(host_ip))
-        response = dns.query.udp(update, '10.133.6.139', timeout=10)
-
-
 def main():
     parser = optparse.OptionParser("Usage: %prog [options]")
     parser.add_option("--debug",
@@ -196,9 +156,6 @@ def main():
     parser.add_option("--list-ips",
                       action="store_true", dest="list_ips", default=False,
                       help="List IP addresses of VMs")
-    parser.add_option("--update-ips",
-                      action="store_true", dest="update_ips", default=False,
-                      help="Update VM IP addresses in DNS")
     parser.add_option("--test",
                       action="store_true", dest="test", default=False,
                       help="do some testing craziness")
@@ -230,9 +187,6 @@ def main():
 
     if options.clone:
         clone_vms(vim, options)
-
-    if options.update_ips:
-        update_ips(vim, options)
 
     if options.list_ips:
         list_ips(vim, options)
