@@ -225,6 +225,9 @@ class Vim(object):
                  path = 'resourcePool',
                  selectSet = [selection_spec('rp_to_rp'),
                               selection_spec('rp_to_vm')]),
+            dict(name = 'cr_to_ds',
+                 type = 'ComputeResource',
+                 path = 'datastore'),
             dict(name = 'cr_to_h',
                  type = 'ComputeResource',
                  path = 'host'),
@@ -247,6 +250,7 @@ class Vim(object):
                               selection_spec('dc_to_hf'),
                               selection_spec('dc_to_vmf'),
                               selection_spec('cr_to_h'),
+                              selection_spec('cr_to_ds'),
                               selection_spec('cr_to_rp'),
                               selection_spec('h_to_vm'),
                               selection_spec('rp_to_vm')])
