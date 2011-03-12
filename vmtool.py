@@ -8,16 +8,13 @@ import optparse
 import time
 import threading
 
-from pyvsphere.vim25 import Vim
+from pyvsphere.vim25 import Vim, ManagedObject
 
 def test(vim, options):
-    vm = vim.find_vm_by_name(options.vm_name, ['summary', 'snapshot'])
-    print vm.summary
-    if vm.snapshot.rootSnapshotList:
-        print vm.snapshot.rootSnapshotList[0].name
+    return
 
 def clone_vms(vim, options):
-    def prepare_clone(vm, clonename, nuke_old=False):
+    def prepare_clone(vm, clonename, nuke_old=False, datastore=None):
         def done(task):
             return (hasattr(task, 'info') and
                     (task.info.state == 'success' or
@@ -42,7 +39,7 @@ def clone_vms(vim, options):
                 print "CLONE(%s) DELETE DONE" % clonename
 
         print "CLONE(%s) CLONE STARTING" % clonename
-        task = vm.clone_vm_task(clonename, linked_clone=False)
+        task = vm.clone_vm_task(clonename, linked_clone=False, datastore=datastore)
         while not done(task):
             task = (yield task)
         print "CLONE(%s) CLONE DONE" % clonename
@@ -67,14 +64,37 @@ def clone_vms(vim, options):
             task = (yield task)
         print "CLONE(%s) SNAPSHOT DONE" % clonename
 
-
-    vm = vim.find_vm_by_name(options.base_image)
+    base_vm = vim.find_vm_by_name(options.base_image, ['storage', 'summary'])
+    assert base_vm, "could not find base VM by the name %s" % options.base_image
+    # Sum the size of disk images scattered over different datastores
+    base_vm.size = sum([x.committed for x in base_vm.storage.perDatastoreUsage])
+    assert base_vm.size > 0, "base vm size is zero? Very unlikely..."
+    # Collect the datastores available on the ComputeResouce hosting the base VM
+    host = ManagedObject(base_vm.summary.runtime.host, vim, ['parent'])
+    cr = ManagedObject(host.parent, vim, ['name', 'datastore'])
+    base_vm.available_datastores = [ManagedObject(x, vim, ['name', 'summary', 'info']) for x in cr.datastore]
 
     ops = {}
     tasks = {}
 
+    def place_vm(base_vm, placement_strategy='random'):
+        import random
+        assert placement_strategy in ['random', 'most-space'], "unknown placement strategy, must be either 'random' or 'most-space'"
+        # Make a list of datastores that have enough space and sort it by free space
+        possible_targets = sorted([x for x in base_vm.available_datastores if x.summary.freeSpace > base_vm.size], key=lambda x: x.summary.freeSpace, reverse=True)
+        assert len(possible_targets) > 0, "no suitable datastore found. Are they all low on space?"
+        if placement_strategy == 'random':
+            target = random.choice(possible_targets)
+        if placement_strategy == 'most-space':
+            target = possible_targets[0]
+        target.summary.freeSpace -= base_vm.size
+        return target
+
     for i in range(options.count):
-        ops[i] = prepare_clone(vm, "%s-%02d" % (options.vm_name, i), True)
+        vm_name = "%s-%02d" % (options.vm_name, i)
+        datastore = place_vm(base_vm)
+        print "Placing %s to %s" % (vm_name, datastore.name)
+        ops[i] = prepare_clone(base_vm, vm_name, True, datastore=datastore)
         tasks[i] = None
 
     while ops:
