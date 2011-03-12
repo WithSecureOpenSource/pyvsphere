@@ -326,39 +326,43 @@ class VirtualMachine(ManagedObject):
         """
         Create a full or linked clone of the VM
 
-        @param: clonename: name of the clone (make sure it does not exist yet)
-        @param: linked_clone: set True for linked clones
-
-        @notes: The clone is created on the same data store and host as its parent
+        @note: see clone_vm_task()
         """
         return self.vim.wait_for_task(self.clone_vm_task(clonename, linked_clone))
 
-    def clone_vm_task(self, clonename=None, linked_clone=False):
+    def clone_vm_task(self, clonename=None, linked_clone=False, resource_pool=None, datastore=None):
         """
         Create a full or linked clone of the VM
 
-        @param: clonename: name of the clone (make sure it does not exist yet)
-        @param: linked_clone: set True for linked clones
+        @param clonename: name of the clone (make sure it does not exist yet)
+        @param linked_clone: set True for linked clones
+        @param resource_pool: name or ManagedObject, defaults to inherit from the base VM
+        @param datastore: name or ManagedObject, defaults to inherit from the base VM
 
         @notes: The clone is created on the same data store and host as its parent
         """
         assert clonename, "clonename needs to be specified"
-        self.update_local_view(properties=['parent', 'summary', 'datastore', 'resourcePool'])
+
+        self.update_local_view(properties=['parent', 'datastore', 'resourcePool'])
+        if datastore:
+            clone_datastore = datastore if isinstance(datastore, ManagedObject) else self.vim.find_entity_by_name('Datastore', datastore)
+        else:
+            clone_datastore = ManagedObject(mor=self.datastore[0], vim=self)
+        assert clone_datastore, "Datastore not set for the clone. The name %s may be incorrect" % str(datastore)
+        if resource_pool:
+            clone_resource_pool = resource_pool if isinstance(datastore, ManagedObject) else self.vim.find_entity_by_name('ResourcePool', resource_pool)
+        else:
+            clone_resource_pool = ManagedObject(mor=self.resourcePool, vim=self)
+        assert clone_resource_pool, "Resource pool not set for the clone. The name %s may be incorrect" % str(resource_pool)
+
         relspec = self.vim.create_object('VirtualMachineRelocateSpec')
-        clonespec = self.vim.create_object('VirtualMachineCloneSpec')
-        host = ManagedObject(mor=self.summary.runtime.host, vim=self.vim)
-        host.update_local_view(properties=['parent', 'datastore'])
-        compute_resource = ManagedObject(mor=host.parent, vim=self.vim)
-        compute_resource.update_local_view(['resourcePool'])
-        # TODO: precise specification of the clone's placement
-        #       could be implemented here. Right now the clone inherits
-        #       from the parent and the rest is left to vSphere.
         relspec.host = None # Leave the host selection to vSphere
-        relspec.pool = compute_resource.resourcePool
-        relspec.datastore = host.datastore[-1]
+        relspec.pool = clone_resource_pool.mor
+        relspec.datastore = clone_datastore.mor
         relspec.transform = None
         if linked_clone:
             relspec.diskMoveType = "moveChildMostDiskBacking"
+        clonespec = self.vim.create_object('VirtualMachineCloneSpec')
         clonespec.location = relspec
         clonespec.powerOn = "0"
         clonespec.template = "0"
