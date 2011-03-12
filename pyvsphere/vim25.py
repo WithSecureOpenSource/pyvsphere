@@ -179,30 +179,25 @@ class Vim(object):
         result = self.invoke('RetrieveProperties',
                              _this=self.property_collector,
                              specSet=propfilterspec)
-        return result
+        return [self.object_from_object_content(x) for x in result]
+
+    def object_from_object_content(self, object_content):
+        if object_content.obj._type == 'VirtualMachine':
+            obj = VirtualMachine(object_content.obj, self)
+        else:
+            obj = ManagedObject(object_content.obj, self)
+        obj.update_object(object_content)
+        return obj
 
     def find_entity_by_name(self, entity_type, entity_name, properties=None):
         entities = self.find_entities_by_type(entity_type, properties=properties)
         for e in entities:
-            for x in e.propSet:
-                found = [x for x in e.propSet if x.name == 'name' and x.val == entity_name]
-            if found:
+            if e.name == entity_name:
                 return e
         return None
 
     def find_vm_by_name(self, vmname, properties=None):
-        vm_entity = self.find_entity_by_name('VirtualMachine', vmname, properties=properties)
-        if vm_entity:
-            vm = VirtualMachine(vm_entity.obj, self)
-            for prop in vm_entity.propSet:
-                if prop.val.__class__.__name__.startswith('Array'):
-                    # suds embeds Array-type data into lists
-                    setattr(vm, prop.name, prop.val[0])
-                else:
-                    setattr(vm, prop.name, prop.val)
-            return vm
-        else:
-            return None
+        return self.find_entity_by_name('VirtualMachine', vmname, properties=properties)
 
     def _build_full_traversal_specs(self):
         def selection_spec(specname):
@@ -272,9 +267,11 @@ class ManagedObjectReference(suds.sudsobject.Property):
 
 
 class ManagedObject(object):
-    def __init__(self, mor, vim):
+    def __init__(self, mor, vim, properties=None):
         self.mor = mor
         self.vim = vim
+        if properties:
+            self.update_local_view(properties)
 
     def update_local_view(self, properties=None):
         assert properties, "properties must be specified"
@@ -292,19 +289,19 @@ class ManagedObject(object):
         object_contents = self.vim.invoke('RetrieveProperties',
                                           _this=self.vim.property_collector,
                                           specSet=pfs)
-        if not object_contents:
-            return False
-        assert len(object_contents) == 1, "got multiple ObjectContent responses"
-        if object_contents:
-            for prop in object_contents[0].propSet:
-                if prop.val.__class__.__name__.startswith('Array'):
-                    # suds embeds Array-type data into lists
-                    setattr(self, prop.name, prop.val[0])
-                else:
-                    setattr(self, prop.name, prop.val)
+        if len(object_contents) == 1:
+            self.update_object(object_contents[0])
             return True
         else:
             return False
+
+    def update_object(self, object_content):
+        for prop in object_content.propSet:
+            if prop.val.__class__.__name__.startswith('Array'):
+                # suds embeds Array-type data into lists
+                setattr(self, prop.name, prop.val[0])
+            else:
+                setattr(self, prop.name, prop.val)
 
 
 class VirtualMachine(ManagedObject):
