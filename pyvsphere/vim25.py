@@ -350,7 +350,7 @@ class VirtualMachine(ManagedObject):
             clone_datastore = ManagedObject(mor=self.datastore[0], vim=self)
         assert clone_datastore, "Datastore not set for the clone. The name %s may be incorrect" % str(datastore)
         if resource_pool:
-            clone_resource_pool = resource_pool if isinstance(datastore, ManagedObject) else self.vim.find_entity_by_name('ResourcePool', resource_pool)
+            clone_resource_pool = resource_pool if isinstance(resource_pool, ManagedObject) else self.vim.find_entity_by_name('ResourcePool', resource_pool)
         else:
             clone_resource_pool = ManagedObject(mor=self.resourcePool, vim=self)
         assert clone_resource_pool, "Resource pool not set for the clone. The name %s may be incorrect" % str(resource_pool)
