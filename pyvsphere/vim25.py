@@ -2,6 +2,7 @@
 #
 # Python interface to VMware vSphere API
 #
+import logging
 import httplib
 import time
 import suds
@@ -33,7 +34,6 @@ class Vim(object):
         @param url: URL to the vSphere server (eg.: https://foosphere/sdk)
         @param debug: Run in debug mode (very noisy)
         """
-        import logging
         self.task_timeout = 600
         if debug:
             logging.basicConfig(level=logging.INFO)
@@ -100,7 +100,7 @@ class Vim(object):
                 raise TaskFailed(error=task.info.error.localizedMessage)
             time.sleep(1)
             if time.time()-start_time > self.task_timeout:
-                raise TimeoutError, "task timed out after %d seconds" % self.tas
+                raise TimeoutError, "task timed out after %d seconds" % self.task
 
     def update_many_objects(self, objects):
         """
@@ -320,7 +320,7 @@ class VirtualMachine(ManagedObject):
         return self.vim.wait_for_task(self.power_off_task())
 
     def power_off_task(self):
-            return ManagedObject(self.vim.invoke('PowerOffVM_Task', _this=self.mor), vim=self.vim)
+        return ManagedObject(self.vim.invoke('PowerOffVM_Task', _this=self.mor), vim=self.vim)
 
     def clone_vm(self, clonename=None, linked_clone=False):
         """
