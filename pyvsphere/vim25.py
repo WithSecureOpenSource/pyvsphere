@@ -390,3 +390,20 @@ class VirtualMachine(ManagedObject):
 
     def revert_to_current_snapshot_task(self):
         return ManagedObject(self.vim.invoke('RevertToCurrentSnapshot_Task', _this=self.mor), vim=self.vim)
+
+    def reconfig_vm(self, spec):
+        """
+        Change VM configuration settings accoding to 'spec'
+
+        @param spec: VirtualMachineConfigSpec type
+        """
+        return self.vim.wait_for_task(self.reconfig_vm_task(spec=spec))
+
+    def reconfig_vm_task(self, spec):
+        """
+        Change VM configuration settings accoding to 'spec'
+
+        @param spec: VirtualMachineConfigSpec type
+        """
+        return ManagedObject(self.vim.invoke('ReconfigVM_Task', _this=self.mor, spec=spec), vim=self.vim)
+
