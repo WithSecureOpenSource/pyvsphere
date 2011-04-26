@@ -412,3 +412,69 @@ class VirtualMachine(ManagedObject):
         """
         return ManagedObject(self.vim.invoke('ReconfigVM_Task', _this=self.mor, spec=spec), vim=self.vim)
 
+    def spec_new_disk(self, size, thin=True, disk_mode='persistent'):
+        """
+        Prepare a device config spec for a new virtual disk (for reconfig_vm())
+
+        @param size: in kilobytes
+        @param thin: thin provisioning (set to False for thick)
+        @param disk_mode: see VirtualDiskMode in the vSphere API documentation
+
+        @note: this method requires at least one disk to be present already
+        """
+        disk_modes = [ "persistent", "independent_persistent", "independent_nonpersistent", "nonpersistent", "undoable", "append" ]
+        assert disk_mode in disk_modes, "disk mode must be one of '%s', not %s" % (", ".join(disk_modes), disk_mode)
+
+        if not hasattr(self, 'config'):
+            assert self.update_local_view(properties=['config']), "failed to update the 'config'property of the VM"
+        # Find the virtual disk controller and its key
+        disk_controllers = [x for x in self.config.hardware.device if x.__class__.__name__ == 'VirtualLsiLogicController']
+        assert disk_controllers, "could not find virtual disk controller 'VirtualLsiLogicController'"
+        controller_key = disk_controllers[0].key
+        # Find a unit number for the new disk
+        virtual_disks = [x for x in self.config.hardware.device if x.__class__.__name__ == 'VirtualDisk']
+        assert virtual_disks, "this method requires at least one disk to be already attached to the VM"
+        new_disk_unit_number = max([x.unitNumber for x in virtual_disks if x.controllerKey == controller_key]) + 1
+
+        backing = self.vim.create_object('VirtualDiskFlatVer2BackingInfo')
+        backing.datastore = virtual_disks[0].backing.datastore
+        backing.fileName = "" # File name chosen by vSphere
+        backing.eagerlyScrub = False
+        backing.thinProvisioned = thin
+        backing.diskMode = disk_mode
+        disk = self.vim.create_object('VirtualDisk')
+        disk.controllerKey = controller_key
+        disk.key = None
+        disk.unitNumber = new_disk_unit_number
+        disk.capacityInKB = size
+        disk.backing = backing
+        file_op_enum = self.vim.create_object('VirtualDeviceConfigSpecFileOperation')
+        spec_enum = self.vim.create_object('VirtualDeviceConfigSpecOperation')
+        device_config_spec = self.vim.create_object('VirtualDeviceConfigSpec')
+        device_config_spec.device = disk
+        device_config_spec.fileOperation = file_op_enum.create
+        device_config_spec.operation = spec_enum.add
+        return device_config_spec
+
+    def spec_new_nic(self, network, nic_type="vmxnet2"):
+        """
+        Prepare a device config spec for a new virtual NIC (for reconfig_vm())
+        """
+        NIC_TYPES = { "e1000":   "VirtualE1000",
+                      "pcnet32": "VirtualPCNet32",
+                      "vmxnet2": "VirtualVmxnet2",
+                      "vmxnet3": "VirtualVmxnet3" }
+        assert nic_type in NIC_TYPES, "nic_type must be one of %s" % ', '.join(NIC_TYPES)
+
+        backing = self.vim.create_object('VirtualEthernetCardNetworkBackingInfo')
+        backing.deviceName = network
+        backing.network = None
+        nic = self.vim.create_object(NIC_TYPES[nic_type])
+        nic.backing = backing
+        nic.key = None
+        spec_enum = self.vim.create_object('VirtualDeviceConfigSpecOperation')
+        device_config_spec = self.vim.create_object('VirtualDeviceConfigSpec')
+        device_config_spec.device = nic
+        device_config_spec.operation = spec_enum.add
+        device_config_spec.fileOperation = None
+        return device_config_spec

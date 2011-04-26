@@ -3,15 +3,22 @@
 # Simple demonstration script for VIM bulk operations
 # Wants to be a useful tool when it grows up.
 import os
-import sys
 import optparse
 import time
-import threading
 
 from pyvsphere.vim25 import Vim, ManagedObject
 
 def test(vim, options):
-    return
+    vm = vim.find_vm_by_name(options.vm_name, ['name', 'summary', 'config'])
+    print vm.name, vm.summary, vm.config
+
+    spec = vim.create_object('VirtualMachineConfigSpec')
+    disk_spec = vm.spec_new_disk(500000)
+    nic_spec = vm.spec_new_nic('UltraGTN-Subnet1')
+    spec.deviceChange = [ disk_spec, nic_spec ]
+    spec.memoryMB = 512
+    spec.numCPUs = 4
+    print vm.reconfig_vm(spec=spec)
 
 def clone_vms(vim, options):
     def prepare_clone(vm, clonename, nuke_old=False, datastore=None):
