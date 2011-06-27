@@ -1,0 +1,10 @@
+build
+dist/
+pyvsphere.egg-info/
+debian/files
+debian/python-module-stampdir/
+debian/python-vsphere.debhelper.log
+debian/python-vsphere.postinst.debhelper
+debian/python-vsphere.prerm.debhelper
+debian/python-vsphere.substvars
+debian/python-vsphere/
