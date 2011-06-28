@@ -1,3 +1,9 @@
+python-vsphere (0.3.2-1) UNRELEASED; urgency=low
+
+  * disk provisioning units changes from kilobytes to megabytes for consistency
+
+ --  <ext-mika.eloranta@f-secure.com>  Tue, 28 Jun 2011 23:10:14 +0300
+
 python-vsphere (0.3.1-1) UNRELEASED; urgency=low
 
   * Finding datastore folders is now possible
