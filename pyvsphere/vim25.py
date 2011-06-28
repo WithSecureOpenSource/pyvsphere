@@ -421,7 +421,7 @@ class VirtualMachine(ManagedObject):
         """
         Prepare a device config spec for a new virtual disk (for reconfig_vm())
 
-        @param size: in kilobytes
+        @param size: in megabytes
         @param thin: thin provisioning (set to False for thick)
         @param disk_mode: see VirtualDiskMode in the vSphere API documentation
 
@@ -451,7 +451,7 @@ class VirtualMachine(ManagedObject):
         disk.controllerKey = controller_key
         disk.key = None
         disk.unitNumber = new_disk_unit_number
-        disk.capacityInKB = size
+        disk.capacityInKB = size * 1024
         disk.backing = backing
         file_op_enum = self.vim.create_object('VirtualDeviceConfigSpecFileOperation')
         spec_enum = self.vim.create_object('VirtualDeviceConfigSpecOperation')
