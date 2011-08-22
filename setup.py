@@ -4,8 +4,8 @@ setup(
     version = "0.1",
     packages = ['pyvsphere'],
     scripts = ['vmtool.py'],
-    author = "Gergely Erdelyi",
-    author_email = "ext-gergely.erdelyi@f-secure.com",
+    author = "F-Secure Corporation",
+    author_email = "<TBD>",
     description = "pyvsphere is a Python client for the VMware vSphere API",
-    license = "FSC INTERNAL"
+    license = "Apache License, Version 2.0"
 )
