@@ -67,10 +67,13 @@ def clone_vms(vim, options):
     # Sum the size of disk images scattered over different datastores
     base_vm.size = sum([x.committed for x in base_vm.storage.perDatastoreUsage])
     assert base_vm.size > 0, "base vm size is zero? Very unlikely..."
-    # Collect the datastores available on the ComputeResouce hosting the base VM
-    host = ManagedObject(base_vm.summary.runtime.host, vim, ['parent'])
-    cr = ManagedObject(host.parent, vim, ['name', 'datastore'])
-    base_vm.available_datastores = [ManagedObject(x, vim, ['name', 'summary', 'info']) for x in cr.datastore]
+
+    # Find all available datastores and optionally filter it
+    datastores = vim.find_entities_by_type('Datastore', ['name', 'summary', 'info'])
+    # List all available datastores that contain <datastore_filter> as substring
+    base_vm.available_datastores = [x for x in datastores if options.datastore_filter in x.name]
+    assert len(base_vm.available_datastores) > 0, "datastore filter '%s' did not mach any of the available datastores: %s" % \
+        (options.datastore_filter, ','.join([x.name for x in datastores]))
 
     ops = {}
     tasks = {}
@@ -181,6 +184,8 @@ def main():
                       help="Number of VMs to process")
     parser.add_option("--base-image", dest="base_image",
                       help="Name of the image to use as base for cloning")
+    parser.add_option("--datastore-filter", dest="datastore_filter", default="",
+                      help="place the clones VMs to datastores which contain the filter substring")
     parser.add_option("--vm-name", dest="vm_name",
                       help="Name of VM (used as a prefix in batch operations)")
     parser.add_option("--username", dest="vi_username", default=None,
