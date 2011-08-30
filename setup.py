@@ -3,9 +3,13 @@ setup(
     name = "pyvsphere",
     version = "0.1",
     packages = ['pyvsphere'],
-    scripts = ['vmtool.py'],
     author = "F-Secure Corporation",
     author_email = "<TBD>",
     description = "pyvsphere is a Python client for the VMware vSphere API",
-    license = "Apache License, Version 2.0"
+    license = "Apache License, Version 2.0",
+    entry_points = {
+        'console_scripts' : [
+            'pyvsphere-tool = pyvsphere.vmtool:main',
+            ]
+        }
 )
