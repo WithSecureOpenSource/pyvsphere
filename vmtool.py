@@ -25,42 +25,42 @@ def clone_vms(vim, options):
         if nuke_old:
             clone = vim.find_vm_by_name(clonename)
             if clone:
-                print "CLONE(%s) POWEROFF STARTING" % clonename
+                if options.verbose: print "CLONE(%s) POWEROFF STARTING" % clonename
                 task = clone.power_off_task()
                 while not done(task):
                     task = (yield task)
-                print "CLONE(%s) POWEOFF DONE" % clonename
-                print "CLONE(%s) DELETE STARTING" % clonename
+                if options.verbose: print "CLONE(%s) POWEOFF DONE" % clonename
+                if options.verbose: print "CLONE(%s) DELETE STARTING" % clonename
                 task = clone.delete_vm_task()
                 while not done(task):
                     task = (yield task)
-                print "CLONE(%s) DELETE DONE" % clonename
+                if options.verbose: print "CLONE(%s) DELETE DONE" % clonename
 
-        print "CLONE(%s) CLONE STARTING" % clonename
+        if options.verbose: print "CLONE(%s) CLONE STARTING" % clonename
         task = vm.clone_vm_task(clonename, linked_clone=False, datastore=datastore)
         while not done(task):
             task = (yield task)
-        print "CLONE(%s) CLONE DONE" % clonename
+        if options.verbose: print "CLONE(%s) CLONE DONE" % clonename
 
         clone = vim.find_vm_by_name(clonename)
 
-        print "CLONE(%s) POWERON STARTING" % clonename
+        if options.verbose: print "CLONE(%s) POWERON STARTING" % clonename
         task = clone.power_on_task()
         while not done(task):
             task = (yield task)
-        print "CLONE(%s) POWERON DONE" % clonename
+        if options.verbose: print "CLONE(%s) POWERON DONE" % clonename
 
-        print "CLONE(%s) WAITING FOR IP" % (clonename)
+        if options.verbose: print "CLONE(%s) WAITING FOR IP" % (clonename)
         task = clone
         while not got_ip(task):
             task = (yield task)
-        print "CLONE(%s) GOT IP: %s" % (clonename, task.summary.guest.ipAddress)
+        if options.verbose: print "CLONE(%s) GOT IP: %s" % (clonename, task.summary.guest.ipAddress)
 
-        print "CLONE(%s) SNAPSHOT STARTING" % clonename
+        if options.verbose: print "CLONE(%s) SNAPSHOT STARTING" % clonename
         task = clone.create_snapshot_task('pristine', memory=True)
         while not done(task):
             task = (yield task)
-        print "CLONE(%s) SNAPSHOT DONE" % clonename
+        if options.verbose: print "CLONE(%s) SNAPSHOT DONE" % clonename
 
     base_vm = vim.find_vm_by_name(options.base_image, ['storage', 'summary'])
     assert base_vm, "could not find base VM by the name %s" % options.base_image
@@ -91,7 +91,7 @@ def clone_vms(vim, options):
     for i in range(options.count):
         vm_name = "%s-%02d" % (options.vm_name, i)
         datastore = place_vm(base_vm)
-        print "Placing %s to %s" % (vm_name, datastore.name)
+        if options.verbose: print "Placing %s to %s" % (vm_name, datastore.name)
         ops[i] = prepare_clone(base_vm, vm_name, True, datastore=datastore)
         tasks[i] = None
 
@@ -104,7 +104,7 @@ def clone_vms(vim, options):
             except StopIteration:
                 del tasks[op_key]
                 del ops[op_key]
-        # print "Still working,", len(ops), "operations active"
+        # if options.verbose: print "Still working,", len(ops), "operations active"
         time.sleep(2)
 
 
@@ -113,11 +113,11 @@ def delete_vms(vim, options):
     clones = [vim.find_vm_by_name(options.vm_name+"-%02d" % x) for x in range(options.count)]
     for clone in [x for x in clones if x]:
         try:
-            print "POWERING OFF", clone.name
+            if options.verbose: print "POWERING OFF", clone.name
             clone.power_off()
         except:
             pass
-        print "DELETING", clone.name
+        if options.verbose: print "DELETING", clone.name
         clone.delete_vm()
 
 
@@ -130,7 +130,7 @@ def list_ips(vim, options):
 
     waiting_for_ips = True
     while waiting_for_ips:
-        print "-" * 40
+        if options.verbose: print "-" * 40
         have_it_all = True
 
         # Update the empty ones
@@ -142,7 +142,7 @@ def list_ips(vim, options):
             ip_address = getattr(clone.summary.guest, 'ipAddress', None)
             if not ip_address:
                 have_it_all = False
-            print clone.name, ip_address if ip_address else "<NO IP ASSIGNED YET>"
+            if options.verbose: print clone.name, ip_address if ip_address else "<NO IP ASSIGNED YET>"
         if have_it_all:
             break
 
@@ -177,7 +177,7 @@ def main():
     parser.add_option("--test",
                       action="store_true", dest="test", default=False,
                       help="do some testing craziness")
-    parser.add_option("--count", dest="count", type="int", default=0,
+    parser.add_option("--count", dest="count", type="int", default=1,
                       help="Number of VMs to process")
     parser.add_option("--base-image", dest="base_image",
                       help="Name of the image to use as base for cloning")
@@ -189,6 +189,9 @@ def main():
                       help="vSphere password")
     parser.add_option("--url", dest="vi_url", default=None,
                       help="vSphere URL (https://<your_server>/sdk)")
+    parser.add_option("-v", "--verbose",
+                      action="store_true", dest="verbose", default=False,
+                      help="keeps you well informed when running")
     (options, args) = parser.parse_args()
 
     vi_url = options.vi_url or os.environ.get('VI_URL')
@@ -199,9 +202,9 @@ def main():
     assert vi_password, "either the enviroment variable VI_PASSWORD or --password needs to be specified"
 
     vim = Vim(vi_url, debug=options.debug)
-    print "CONNECTION complete"
+    if options.verbose: print "CONNECTION complete"
     vim.login(vi_username, vi_password)
-    print "LOGIN complete"
+    if options.verbose: print "LOGIN complete"
 
     if options.clone:
         clone_vms(vim, options)
