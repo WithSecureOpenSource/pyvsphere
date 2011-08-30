@@ -1,7 +1,7 @@
 from setuptools import setup
 setup(
     name = "pyvsphere",
-    version = "0.1",
+    version = "0.4.0",
     packages = ['pyvsphere'],
     author = "F-Secure Corporation",
     author_email = "<TBD>",
