@@ -2,7 +2,7 @@ python-vsphere (0.4.0-1) UNRELEASED; urgency=low
 
   * First public release, many cleanups
 
- -- Mika Eloranta <ext-mika.eloranta@f-secure.com>  Tue, 30 Aug 2011 16:00:14 +0300
+ -- Gergely Erdelyi <ext-gergely.erdelyi@f-secure.com>  Tue, 30 Aug 2011 16:00:14 +0300
 
 python-vsphere (0.3.2-1) UNRELEASED; urgency=low
 

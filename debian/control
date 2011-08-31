@@ -6,7 +6,7 @@ Build-Depends: cdbs, debhelper (>= 5), python (>=2.4), python-support (>= 0.5)
 
 Package: python-vsphere
 Architecture: all
-Depends: ${python:Depends}, ${misc:Depends}, python-pkg-resources
+Depends: ${python:Depends}, ${misc:Depends}, python-pkg-resources, python-suds
 Provides: ${python:Provides}
 Description: pyvsphere is a simple python client for the VMware vSphere API
  pyvsphere is a simple python client for the VMware vSphere API
