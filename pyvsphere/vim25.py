@@ -73,7 +73,7 @@ class Vim(object):
         try:
             return getattr(self.soapclient.service, method)(**kwargs)
         except httplib.BadStatusLine:
-            return False
+            return None
 
     def invoke_task(self, method, **kwargs):
         """
