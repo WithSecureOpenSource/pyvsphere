@@ -167,13 +167,30 @@ class Vim(object):
         return True, updated_objects
 
     def login(self, username, password):
+        """
+        Log in to the vSphere service
+
+        @param username: name of user
+        @param password: password to use
+        """
         self.invoke('Login', _this=self.service_content.sessionManager,
                     userName=username, password=password)
 
     def logout(self):
+        """
+        Log out from the vSphere service
+        """
         self.invoke('Logout', _this=self.service_content.sessionManager)
 
     def find_entities_by_type(self, entity_type, properties=None):
+        """
+        Find vSphere entities (ManagedObjects) by type
+
+        @param entity_type: type of the entity (for example 'DataStore')
+        @param properties: list of properties to fetch immediately
+
+        @return: list of found objects
+        """
         # Prop spec
         propspec = self.create_object('PropertySpec')
         propspec.type = entity_type
@@ -204,6 +221,15 @@ class Vim(object):
         return obj
 
     def find_entity_by_name(self, entity_type, entity_name, properties=None):
+        """
+        Find a specific vSphere entity (ManagedObjects) by its name
+
+        @param entity_type: type of the entity (for example 'DataStore')
+        @param entity_name: name of the entity
+        @param properties: list of properties to fetch immediately
+
+        @return: object or None if not found
+        """
         entities = self.find_entities_by_type(entity_type, properties=properties)
         for e in entities:
             if e.name == entity_name:
@@ -211,6 +237,13 @@ class Vim(object):
         return None
 
     def find_vm_by_name(self, vmname, properties=None):
+        """
+        Find a virtual machine by its name
+
+        @param vmname: name of VM
+
+        @return: VirtualMachine object or None if not found
+        """
         return self.find_entity_by_name('VirtualMachine', vmname, properties=properties)
 
     def _build_full_traversal_specs(self):
@@ -298,6 +331,13 @@ class ManagedObject(object):
             self.update_local_view(properties)
 
     def update_local_view(self, properties=None):
+        """
+        Update the local version of the specified properties from the server
+
+        @param properties: list of property names to update
+
+        @return: True on success, False otherwise
+        """
         assert properties, "properties must be specified"
         # Specify which properties we want
         # TODO: could do an 'all' here if needed
@@ -320,6 +360,11 @@ class ManagedObject(object):
             return False
 
     def update_object(self, object_content):
+        """
+        Update the object from an object content response from the server
+
+        @param object_content: object content to update with
+        """
         for prop in object_content.propSet:
             if prop.val.__class__.__name__.startswith('Array'):
                 # suds embeds Array-type data into lists
