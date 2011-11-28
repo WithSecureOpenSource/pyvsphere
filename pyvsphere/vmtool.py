@@ -210,6 +210,8 @@ def main():
                       help="vSphere password")
     parser.add_option("--url", dest="vi_url", default=None,
                       help="vSphere URL (https://<your_server>/sdk)")
+    parser.add_option("--vsphere-version", dest="vi_version", default=None,
+                      help="vSphere version number)")
     parser.add_option("-v", "--verbose",
                       action="store_true", dest="verbose", default=False,
                       help="keeps you well informed when running")
@@ -221,8 +223,10 @@ def main():
     assert vi_username, "either the enviroment variable VI_USERNAME or --username needs to be specified"
     vi_password = options.vi_password or os.environ.get('VI_PASSWORD')
     assert vi_password, "either the enviroment variable VI_PASSWORD or --password needs to be specified"
+    
+    vi_version = options.vi_version or os.environ.get('VI_VERSION')
 
-    vim = Vim(vi_url, debug=options.debug)
+    vim = Vim(vi_url, debug=options.debug, version=vi_version)
     if options.verbose: print "CONNECTION complete"
     vim.login(vi_username, vi_password)
     if options.verbose: print "LOGIN complete"

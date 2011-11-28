@@ -1,3 +1,9 @@
+python-vsphere (0.5.0-1) UNRELEASED; urgency=low
+
+  * Added workaround to allow working with vSphere 5.0.0
+
+ -- Juha Tiensyrjä <juha.tiensyrja@f-secure.com>  Mon, 28 Nov 2011 14:29:28 +0300
+
 python-vsphere (0.4.0-1) UNRELEASED; urgency=low
 
   * First public release, many cleanups

@@ -43,7 +43,7 @@ class Vim(object):
     """
     Interface class for VMware VIM API over SOAP
     """
-    def __init__(self, url, debug=False):
+    def __init__(self, url, debug=False, version=None):
         """
         @param url: URL to the vSphere server (eg.: https://foosphere/sdk)
         @param debug: Run in debug mode (very noisy)
@@ -56,7 +56,15 @@ class Vim(object):
             logging.basicConfig(level=logging.INFO)
             logging.getLogger('suds').setLevel(logging.INFO)
 
-        self.soapclient = suds.client.Client(url+"/vimService.wsdl")
+        # There are some missing schema files on vSphere Web Services SDK
+        # version 5.0.0, so we'll just bundle them with this piece of
+        # software.
+        # See: http://www.vmware.com/support/developer/vc-sdk/wssdk_5_0_releasenotes.html#knownissues
+        if version == "5.0.0":
+            self.soapclient = suds.client.Client("file:///usr/share/pyshared/pyvsphere/vSphere_5.0.0/vim25/vimService.wsdl")
+        else:
+            self.soapclient = suds.client.Client(url+"/vimService.wsdl")
+            
         self.soapclient.set_options(location=url)
         self.soapclient.set_options(cachingpolicy=1)
         self.service_instance = ManagedObjectReference(_type='ServiceInstance',
