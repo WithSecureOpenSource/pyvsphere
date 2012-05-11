@@ -445,7 +445,7 @@ class VirtualMachine(ManagedObject):
         clonespec.template = "0"
         clonespec.snapshot = None
         task_mor = self.vim.invoke('CloneVM_Task', _this=self.mor, name=clonename, spec=clonespec, folder=self.parent)
-        task = ManagedObject(mor=task_mor, vim=self)
+        task = ManagedObject(mor=task_mor, vim=self.vim)
         return task
 
     def delete_vm(self):
