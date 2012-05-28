@@ -64,7 +64,7 @@ class VmTool(object):
         ops = {}
         tasks = {}
         for vm_name in self.vm_names_from_options(options):
-            instance = dict(vm_name=vm_name, base_vm_name=options.base_image, datastore_filter=options.datastore_filter)
+            instance = dict(vm_name=vm_name, base_vm_name=options.base_image, datastore_filter=options.datastore_filter, folder=options.folder)
             ops[vm_name] = self.vmops.clone_vm(instance, nuke_old=True)
             tasks[vm_name] = None
 
@@ -168,6 +168,8 @@ def main():
                       help='place the clones VMs to datastores which contain the filter substring')
     parser.add_option('--vm-name', dest='vm_name',
                       help='Name of VM (used as a prefix in batch operations)')
+    parser.add_option('--folder', dest='folder', default='',
+                      help='destination folder for the clones, in the format of Data Center/vm/Any/Folder/Name')
     parser.add_option('--username', dest='vi_username', default=None,
                       help='vSphere user name')
     parser.add_option('--password', dest='vi_password', default=None,

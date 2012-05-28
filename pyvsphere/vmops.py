@@ -129,7 +129,7 @@ class VmOperations(object):
             datastore=place_vm(base_vm, placement_strategy=placement_strategy)
 
         self.log.debug('CLONE(%s) CLONE STARTING' % vm_name)
-        task = base_vm.clone_vm_task(vm_name, linked_clone=False, datastore=datastore, resource_pool=instance.get('resource_pool', None))
+        task = base_vm.clone_vm_task(vm_name, linked_clone=False, datastore=datastore, resource_pool=instance.get('resource_pool', None), folder=instance.get('folder'))
         while not done(task):
             task = (yield task)
         self.log.debug('CLONE(%s) CLONE DONE' % vm_name)
