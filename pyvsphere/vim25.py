@@ -428,9 +428,10 @@ class VirtualMachine(ManagedObject):
         assert clone_datastore, "Datastore not set for the clone. The name %s may be incorrect" % str(datastore)
         if resource_pool:
             clone_resource_pool = resource_pool if isinstance(resource_pool, ManagedObject) else self.vim.find_entity_by_name('ResourcePool', resource_pool)
+            assert clone_resource_pool, "resource pool %r not found" % resource_pool
+            clone_resource_pool = clone_resource_pool.mor
         else:
-            clone_resource_pool = ManagedObject(mor=self.resourcePool, vim=self)
-        assert clone_resource_pool, "Resource pool not set for the clone. The name %s may be incorrect" % str(resource_pool)
+            clone_resource_pool = None
         if folder:
             target_folder = self.vim.invoke('FindByInventoryPath', _this=self.vim.service_content.searchIndex, inventoryPath=folder)
             assert target_folder, "specified target folder %r not found" % folder
@@ -439,7 +440,8 @@ class VirtualMachine(ManagedObject):
 
         relspec = self.vim.create_object('VirtualMachineRelocateSpec')
         relspec.host = None # Leave the host selection to vSphere
-        relspec.pool = clone_resource_pool.mor
+        relspec.pool = None
+        relspec.pool = clone_resource_pool
         relspec.datastore = clone_datastore.mor
         relspec.transform = None
         if linked_clone:
