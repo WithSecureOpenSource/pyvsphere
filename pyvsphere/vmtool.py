@@ -4,7 +4,7 @@
 # Simple demonstration script for VIM bulk operations
 # Wants to be a useful tool when it grows up.
 #
-# Copyright 2011 F-Secure Corporation
+# Copyright 2011-2012 F-Secure Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
