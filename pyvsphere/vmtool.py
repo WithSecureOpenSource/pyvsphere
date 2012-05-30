@@ -116,8 +116,9 @@ class VmTool(object):
             have_it_all = True
 
             # Update the empty ones
-            for clone in [clone for clone in clones if not getattr(clone.summary.guest, 'ipAddress', None)]:
-                clone.update_local_view(['name', 'summary'])
+            for clone in clones:
+                if not getattr(clone.summary.guest, 'ipAddress', None):
+                    clone.update_local_view(['name', 'summary'])
 
             have_it_all = True
             for clone in clones:
