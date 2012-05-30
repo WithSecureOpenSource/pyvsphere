@@ -4,7 +4,7 @@
 # Simple demonstration script for VIM bulk operations
 # Wants to be a useful tool when it grows up.
 #
-# Copyright 2011 F-Secure Corporation
+# Copyright 2011-2012 F-Secure Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 import logging
 import os
 import optparse
+import sys
 import time
 
 from vim25 import Vim, ManagedObject
@@ -188,6 +189,12 @@ def main():
                       action='store_true', dest='verbose', default=False,
                       help='keeps you well informed when running')
     (options, args) = parser.parse_args()
+
+    if not any(getattr(options, x) for x in ['clone', 'list_ips', 'delete', 'snapshot', 'revert', 'test']):
+        parser.print_help()
+        sys.exit(1)
+
+    assert options.vm_name, 'VM name needs to be specified with --vm_name <vm-name>'
 
     vmtool = VmTool(options.vi_url, options.vi_username, options.vi_password, options.vi_version, options.verbose)
     

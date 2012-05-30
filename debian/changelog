@@ -1,3 +1,12 @@
+python-vsphere (0.6.0-1) UNRELEASED; urgency=low
+
+  * Add vmops module
+  * Refactored vmtool to use vmops
+  * Destination for cloned VMs can now specified
+  * Allow empty resource pool name to place VM to the root pool
+
+ -- Gergely Erdelyi <ext-gergely.erdelyi@f-secure.com>  Wed, 30 May 2012 10:30:00 +0300
+
 python-vsphere (0.5.0-1) UNRELEASED; urgency=low
 
   * Added workaround to allow working with vSphere 5.0.0
