@@ -407,7 +407,7 @@ class VirtualMachine(ManagedObject):
         """
         return self.vim.wait_for_task(self.clone_vm_task(clonename, linked_clone))
 
-    def clone_vm_task(self, clonename=None, linked_clone=False, resource_pool=None, datastore=None):
+    def clone_vm_task(self, clonename=None, linked_clone=False, resource_pool=None, datastore=None, folder=None):
         """
         Create a full or linked clone of the VM
 
@@ -431,6 +431,11 @@ class VirtualMachine(ManagedObject):
         else:
             clone_resource_pool = ManagedObject(mor=self.resourcePool, vim=self)
         assert clone_resource_pool, "Resource pool not set for the clone. The name %s may be incorrect" % str(resource_pool)
+        if folder:
+            target_folder = self.vim.invoke('FindByInventoryPath', _this=self.vim.service_content.searchIndex, inventoryPath=folder)
+            assert target_folder, "specified target folder %r not found" % folder
+        else:
+            target_folder = self.parent
 
         relspec = self.vim.create_object('VirtualMachineRelocateSpec')
         relspec.host = None # Leave the host selection to vSphere
@@ -444,7 +449,7 @@ class VirtualMachine(ManagedObject):
         clonespec.powerOn = "0"
         clonespec.template = "0"
         clonespec.snapshot = None
-        task_mor = self.vim.invoke('CloneVM_Task', _this=self.mor, name=clonename, spec=clonespec, folder=self.parent)
+        task_mor = self.vim.invoke('CloneVM_Task', _this=self.mor, name=clonename, spec=clonespec, folder=target_folder)
         task = ManagedObject(mor=task_mor, vim=self.vim)
         return task
 
