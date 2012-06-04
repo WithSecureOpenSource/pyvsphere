@@ -373,7 +373,7 @@ class ManagedObject(object):
 
         @param object_content: object content to update with
         """
-        for prop in object_content.propSet:
+        for prop in getattr(object_content, 'propSet', []):
             if prop.val.__class__.__name__.startswith('Array'):
                 # suds embeds Array-type data into lists
                 setattr(self, prop.name, prop.val[0])
@@ -475,6 +475,30 @@ class VirtualMachine(ManagedObject):
     def revert_to_current_snapshot_task(self):
         return ManagedObject(self.vim.invoke('RevertToCurrentSnapshot_Task', _this=self.mor), vim=self.vim)
 
+    def list_snapshots(self):
+        """ Return all snapshots as VirtualMachineSnapshotTree objects """
+        def collect_snapshots(snapshot_list):
+            snapshots = []
+            for snap in snapshot_list:
+                snapshots.append(snap)
+                child_list = getattr(snap, 'childSnapshotList', None)
+                if child_list:
+                    snapshots.extend(collect_snapshots(child_list))
+            return snapshots
+
+        self.update_local_view(properties=['snapshot'])
+        if getattr(self, 'snapshot', None):
+            snapshots = collect_snapshots(self.snapshot.rootSnapshotList)
+            # Swap out the snapshot references to directly-usable snapshot objects
+            for snapshot in snapshots:
+                snapshot.snapshot = VirtualMachineSnapshot(mor=snapshot.snapshot, vim=self.vim)
+            return snapshots
+        else:
+            return []
+
+    def find_snapshots_by_name(self, name):
+        return [snapshot for snapshot in self.list_snapshots() if snapshot.name == name]
+
     def reconfig_vm(self, spec):
         """
         Change VM configuration settings accoding to 'spec'
@@ -557,3 +581,24 @@ class VirtualMachine(ManagedObject):
         device_config_spec.operation = spec_enum.add
         device_config_spec.fileOperation = None
         return device_config_spec
+
+
+class VirtualMachineSnapshot(ManagedObject):
+    def rename_snapshot(self, name=None, description=None):
+        assert name or description, "at least one of 'name' and 'description' must be supplied"
+        self.vim.invoke('RenameSnapshot', _this=self.mor, name=name, description=description)
+
+    def remove_snapshot(self, remove_children=False):
+        return self.vim.wait_for_task(self.remove_snapshot_task(remove_children=remove_children))
+
+    def remove_snapshot_task(self, remove_children=False):
+        return ManagedObject(self.vim.invoke('RemoveSnapshot_Task', _this=self.mor, removeChildren=remove_children), vim=self.vim)
+
+    def revert_to_snapshot(self, suppress_power_on=False):
+        return self.vim.wait_for_task(self.revert_to_snapshot_task(suppress_power_on=suppress_power_on))
+
+    def revert_to_snapshot_task(self, suppress_power_on=False):
+        return ManagedObject(self.vim.invoke('RevertToSnapshot_Task', _this=self.mor, suppressPowerOn=suppress_power_on), vim=self.vim)
+
+    def __eq__(self, other):
+        return self.mor._type == other.mor._type and self.mor.value == other.mor.value

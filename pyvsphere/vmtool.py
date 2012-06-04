@@ -24,7 +24,7 @@ import optparse
 import sys
 import time
 
-from vim25 import Vim, ManagedObject
+from vim25 import Vim, ManagedObject, ManagedObjectReference, VirtualMachineSnapshot
 from vmops import VmOperations
 
 
@@ -138,10 +138,29 @@ class VmTool(object):
         vm = self.vim.find_vm_by_name(options.vm_name)
         vm.create_snapshot(options.snapshot, memory=True)
 
+    def list_snapshots(self, options):
+        vm = self.vim.find_vm_by_name(options.vm_name, ['snapshot'])
+        snapshots = vm.list_snapshots()
+        if snapshots:
+            current_snapshot = VirtualMachineSnapshot(mor=vm.snapshot.currentSnapshot, vim=self.vim)
+            for snapshot in snapshots:
+                print snapshot.name, '(CURRENT)' if snapshot.snapshot == current_snapshot else ''
+
     def revert(self, options):
         vm = self.vim.find_vm_by_name(options.vm_name)
         vm.revert_to_current_snapshot()
 
+    def remove_snapshot(self, options):
+        vm = self.vim.find_vm_by_name(options.vm_name)
+        snapshots = vm.find_snapshots_by_name(options.remove_snapshot)
+        if snapshots:
+            snapshots[0].snapshot.remove_snapshot(remove_children=True)
+
+    def revert_to_snapshot(self, options):
+        vm = self.vim.find_vm_by_name(options.vm_name)
+        snapshotinfos = vm.find_snapshots_by_name(options.revert_to_snapshot)
+        assert len(snapshotinfos) == 1, 'there are multiple snapshots with the name %r' % options.revert_to_snapshot
+        snapshotinfos[0].snapshot.revert_to_snapshot()
 
 def main():
     parser = optparse.OptionParser('Usage: %prog [options]')
@@ -154,9 +173,18 @@ def main():
     parser.add_option('--snapshot',
                       dest='snapshot', default=None,
                       help='Take a snapshot with <name>')
+    parser.add_option('--list-snapshots',
+                      action='store_true', dest='list_snapshots', default=False,
+                      help='List snapshots for the VM')
     parser.add_option('--revert',
                       action='store_true', dest='revert', default=False,
                       help='Revert to current snapshot')
+    parser.add_option('--remove-snapshot',
+                      dest='remove_snapshot', default=None,
+                      help='Take a snapshot <name>')
+    parser.add_option('--revert-to-snapshot',
+                      dest='revert_to_snapshot', default=None,
+                      help='Revert to snapshot <name>')
     parser.add_option('--delete',
                       action='store_true', dest='delete', default=False,
                       help='Delete VMs')
@@ -191,7 +219,9 @@ def main():
                       help='keeps you well informed when running')
     (options, args) = parser.parse_args()
 
-    if not any(getattr(options, x) for x in ['clone', 'list_ips', 'delete', 'snapshot', 'revert', 'test']):
+    commands = ['clone', 'list_ips', 'delete', 'snapshot', 'list_snapshots',
+                'remove_snapshot', 'revert_to_snapshot', 'revert', 'test']
+    if not any(getattr(options, x) for x in commands):
         parser.print_help()
         sys.exit(1)
 
@@ -210,6 +240,15 @@ def main():
 
     if options.snapshot:
         vmtool.snapshot(options)
+
+    if options.list_snapshots:
+        vmtool.list_snapshots(options)
+
+    if options.remove_snapshot:
+        vmtool.remove_snapshot(options)
+
+    if options.revert_to_snapshot:
+        vmtool.revert_to_snapshot(options)
 
     if options.revert:
         vmtool.revert(options)
