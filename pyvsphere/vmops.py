@@ -76,8 +76,7 @@ class VmOperations(object):
         Perform a full clone-poweron-snapshot cycle on the instance
 
         This is a generator function which is used in a co-operative
-        multitasking manner. See wait_instances() for an idea on its
-        usage.
+        multitasking manner. Typically this would be used through run_on_instances().
 
         @param instance: dict of the VM instance to create
         @param nuke_old: should an existing VM with the same be nuked
@@ -197,8 +196,7 @@ class VmOperations(object):
         Perform a quick snapshot revert on a VM instance
 
         This is a generator function which is used in a co-operative
-        multitasking manner. See wait_instances() for an idea on its
-        usage.
+        multitasking manner. Typically this would be used through run_on_instances().
 
         @param instance: dict of the VM instance to create
 
@@ -237,8 +235,7 @@ class VmOperations(object):
         Power off and delete a VM
 
         This is a generator function which is used in a co-operative
-        multitasking manner. See wait_instances() for an idea on its
-        usage.
+        multitasking manner. Typically this would be used through run_on_instances().
 
         @param instance: dict of the VM instance to delete
 
@@ -275,8 +272,7 @@ class VmOperations(object):
         Get updated info from the VM instance
 
         This is a generator function which is used in a co-operative
-        multitasking manner. See wait_instances() for an idea on its
-        usage.
+        multitasking manner. Typically this would be used through run_on_instances().
 
         @param instance: dict of the VM instance to update
 
