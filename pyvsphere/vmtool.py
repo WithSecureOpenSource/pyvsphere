@@ -62,46 +62,21 @@ class VmTool(object):
                  yield '%s-%02d' % (options.vm_name, i)
 
     def clone_vms(self, options):
-        ops = {}
-        tasks = {}
+        instances = dict()
         for vm_name in self.vm_names_from_options(options):
             instance = dict(vm_name=vm_name,
                             base_vm_name=options.base_image,
                             datastore_filter=options.datastore_filter,
                             folder=options.folder,
                             resource_pool=options.resource_pool)
-            ops[vm_name] = self.vmops.clone_vm(instance, nuke_old=True)
-            tasks[vm_name] = None
-
-        return self._run_operations(ops, tasks)
-
-    def _run_operations(self, ops, tasks):
-        next_report = time.time() + 10.0
-        while ops:
-            if any(tasks.itervalues()):
-                _,tasks = self.vim.update_many_objects(tasks)
-            for op_key in list(ops):
-                try:
-                    tasks[op_key] = ops[op_key].send(tasks[op_key])
-                except StopIteration:
-                    del tasks[op_key]
-                    del ops[op_key]
-                except Exception, err:
-                    self.log.exception('%s failed', op_key)
-                    del tasks[op_key]
-                    del ops[op_key]
-            if time.time() >= next_report:
-                self.log.debug('%d instances still waiting', len(ops))
-                next_report = time.time() + 10.0
-
-            time.sleep(2)
+            instances[vm_name] = instance
+        args = {'nuke_old': True}
+        return self.vmops.run_on_instances(instances, self.vmops.clone_vm, args)
 
     def delete_vms(self, options):
         """ Delete a batch of VMs """
-        instances = [dict(vm_name=x, vm=None) for x in self.vm_names_from_options(options)]
-        ops = dict((instance['vm_name'],self.vmops.delete_vm(instance)) for instance in instances)
-        tasks = dict((instance['vm_name'],None) for instance in instances)
-        return self._run_operations(ops, tasks)
+        instances = dict((x, dict(vm_name=x, vm=None)) for x in self.vm_names_from_options(options))
+        return self.vmops.run_on_instances(instances, self.vmops.delete_vm)
 
     def list_ips(self, options):
         """ List the IP addresses of a number of VMs """

@@ -15,8 +15,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+import copy
 import logging
 import random
+import time
+import traceback
 
 from vim25 import ManagedObject
 
@@ -266,3 +269,45 @@ class VmOperations(object):
         while not done(task):
             task = (yield task)
         self.log.debug('DELETE(%s) DELETE DONE' % vm_name)
+
+    def run_on_instances(self, instances, operation, args=None):
+        """
+        Run the specified operations in parallel on all the instances
+
+        @param instances: a dict of instance_id -> instance_dict pairs
+        @param operation: function to run on each instance
+        @param args: dict of named arguments to pass to 'operation'
+
+        @note: sets an 'error' key in the instance with the traceback
+               in case of errors
+        """
+        if not args:
+            args = {}
+        ops = {}
+        tasks = {}
+        updated_instances = dict()
+        for instance_id,instance_dict in instances.iteritems():
+            instance_copy = copy.deepcopy(instance_dict)
+            updated_instances[instance_id] = instance_copy
+            ops[instance_id] = operation(instance_copy, **args)
+            tasks[instance_id] = None
+        next_report = time.time() + 10.0
+        while ops:
+            if any(tasks.itervalues()):
+                _,tasks = self.vim.update_many_objects(tasks)
+            for instance_id in list(ops):
+                try:
+                    tasks[instance_id] = ops[instance_id].send(tasks[instance_id])
+                except StopIteration:
+                    del tasks[instance_id]
+                    del ops[instance_id]
+                except Exception, err:
+                    self.log.exception('%s failed', instance_id)
+                    updated_instances[instance_id]['error'] = traceback.format_exc()
+                    del tasks[instance_id]
+                    del ops[instance_id]
+            if time.time() >= next_report:
+                self.log.debug('%d instances still waiting', len(ops))
+                next_report = time.time() + 10.0
+            time.sleep(2)
+        return updated_instances
