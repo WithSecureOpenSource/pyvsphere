@@ -270,6 +270,35 @@ class VmOperations(object):
             task = (yield task)
         self.log.debug('DELETE(%s) DELETE DONE' % vm_name)
 
+    def update_vm(self, instance):
+        """
+        Get updated info from the VM instance
+
+        This is a generator function which is used in a co-operative
+        multitasking manner. See wait_instances() for an idea on its
+        usage.
+
+        @param instance: dict of the VM instance to update
+
+        @return: generator function
+        """
+        def done(task):
+            return (hasattr(task, 'summary') and
+                    getattr(task.summary.guest, 'ipAddress', None))
+
+        vm_name = instance['vm_name']
+        vm = instance.get('vm')
+        if not vm:
+            vm = self.vim.find_vm_by_name(vm_name)
+        assert vm, "VM %s not found in vSphere, something is terribly wrong here" % vm_name
+
+        self.log.debug("UPDATE-VM(%s) WAITING FOR IP" % (vm_name))
+        task = vm
+        while not done(task):
+            task = (yield task)
+        self.log.debug("UPDATE-VM(%s) GOT IP: %s" % (vm_name, task.summary.guest.ipAddress))
+        instance['ipv4'] = task.summary.guest.ipAddress
+
     def run_on_instances(self, instances, operation, args=None):
         """
         Run the specified operations in parallel on all the instances

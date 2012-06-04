@@ -80,34 +80,10 @@ class VmTool(object):
 
     def list_ips(self, options):
         """ List the IP addresses of a number of VMs """
-        clones = [self.vim.find_vm_by_name(x) for x in self.vm_names_from_options(options)]
-        clones = [x for x in clones if x]
-        # Update all the clones once
-        _ = [x.update_local_view(['name', 'summary']) for x in clones]
-
-        waiting_for_ips = True
-        while waiting_for_ips:
-            self.log.debug('-' * 40)
-            have_it_all = True
-
-            # Update the empty ones
-            for clone in clones:
-                if not getattr(clone.summary.guest, 'ipAddress', None):
-                    clone.update_local_view(['name', 'summary'])
-
-            have_it_all = True
-            for clone in clones:
-                ip_address = getattr(clone.summary.guest, 'ipAddress', None)
-                if not ip_address:
-                    have_it_all = False
-                if ip_address:
-                    self.log.debug('%s: %s', clone.name, ip_address)
-                else:
-                    self.log.debug('%s: %s', ip_address, '<NO IP ASSIGNED YET>')
-            if have_it_all:
-                break
-        for clone in clones:
-            print '%s: %s' % (clone.name, clone.summary.guest.ipAddress)
+        instances = dict((x, dict(vm_name=x)) for x in self.vm_names_from_options(options))
+        updated_instances = self.vmops.run_on_instances(instances, self.vmops.update_vm)
+        for instance_id in updated_instances:
+            print '%s: %s' % (instance_id, updated_instances[instance_id]['ipv4'])
 
     def snapshot(self, options):
         vm = self.vim.find_vm_by_name(options.vm_name)
