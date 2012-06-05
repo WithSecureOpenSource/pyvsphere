@@ -191,7 +191,25 @@ class VmOperations(object):
             task = (yield task)
         self.log.debug('CLONE(%s) SNAPSHOT DONE' % vm_name)
 
-    def revert_vm(self, instance):
+    def create_snapshot(self, instance, name=None, description=None, memory=False):
+        def done(task):
+            return (hasattr(task, 'info') and
+                    (task.info.state == 'success' or
+                     task.info.state == 'error'))
+
+        vm_name = instance['vm_name']
+        vm = instance['vm']
+        if not vm:
+            vm = self.vim.find_vm_by_name(vm_name, ['snapshot'])
+        assert vm, 'VM %s not found in vSphere, something is terribly wrong here' % vm_name
+
+        self.log.debug('CREATE-SNAPSHOT(%s) STARTING' % vm_name)
+        task = vm.create_snapshot_task(name, description, memory)
+        while not done(task):
+            task = (yield task)
+        self.log.debug('CREATE-SNAPSHOT(%s) DONE' % vm_name)
+
+    def revert_to_snapshot(self, instance, name=None, wait_for_ip=True):
         """
         Perform a quick snapshot revert on a VM instance
 
@@ -199,6 +217,7 @@ class VmOperations(object):
         multitasking manner. Typically this would be used through run_on_instances().
 
         @param instance: dict of the VM instance to create
+        @param name: name of snapshot, revert to current snapshot if None
 
         @return: generator function
         """
@@ -218,17 +237,43 @@ class VmOperations(object):
         assert vm, 'VM %s not found in vSphere, something is terribly wrong here' % vm_name
 
         self.log.debug('REVERT(%s) STARTING' % vm_name)
-        task = vm.revert_to_current_snapshot_task()
+        if name:
+            snapshots = vm.find_snapshots_by_name(name)
+            assert len(snapshots) == 1, 'there must be one, and only one, snapshot with the name %r' % name
+            task = snapshots[0].snapshot.revert_to_snapshot_task()
+        else:
+            task = vm.revert_to_current_snapshot_task()
         while not done(task):
             task = (yield task)
         self.log.debug('REVERT(%s) DONE' % vm_name)
 
-        self.log.debug('REVERT(%s) WAITING FOR IP' % (vm_name))
-        task = vm
-        while not got_ip(task):
+        if wait_for_ip:
+            self.log.debug('REVERT(%s) WAITING FOR IP' % (vm_name))
+            task = vm
+            while not got_ip(task):
+                task = (yield task)
+            self.log.debug('REVERT(%s) GOT IP: %s' % (vm_name, task.summary.guest.ipAddress))
+            instance['ipv4'] = task.summary.guest.ipAddress
+
+    def remove_snapshot(self, instance, name=None):
+        def done(task):
+            return (hasattr(task, 'info') and
+                    (task.info.state == 'success' or
+                     task.info.state == 'error'))
+
+        vm_name = instance['vm_name']
+        vm = instance['vm']
+        if not vm:
+            vm = self.vim.find_vm_by_name(vm_name, ['snapshot'])
+        assert vm, 'VM %s not found in vSphere, something is terribly wrong here' % vm_name
+
+        self.log.debug('REMOVE-SNAPSHOT(%s) STARTING' % vm_name)
+        snapshots = vm.find_snapshots_by_name(name)
+        assert len(snapshots) == 1, 'there must be one, and only one, snapshot with the name %r' % name
+        task = snapshots[0].snapshot.remove_snapshot_task(remove_children=True)
+        while not done(task):
             task = (yield task)
-        self.log.debug('REVERT(%s) GOT IP: %s' % (vm_name, task.summary.guest.ipAddress))
-        instance['ipv4'] = task.summary.guest.ipAddress
+        self.log.debug('REMOVE-SNAPSHOT(%s) DONE' % vm_name)
 
     def delete_vm(self, instance):
         """
@@ -312,7 +357,7 @@ class VmOperations(object):
         tasks = {}
         updated_instances = dict()
         for instance_id,instance_dict in instances.iteritems():
-            instance_copy = copy.deepcopy(instance_dict)
+            instance_copy = copy.copy(instance_dict)
             updated_instances[instance_id] = instance_copy
             ops[instance_id] = operation(instance_copy, **args)
             tasks[instance_id] = None
