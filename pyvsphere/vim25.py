@@ -56,14 +56,13 @@ class Vim(object):
             logging.basicConfig(level=logging.INFO)
             logging.getLogger('suds').setLevel(logging.INFO)
 
-        # There are some missing schema files on vSphere Web Services SDK
-        # version 5.0.0, so we'll just bundle them with this piece of
-        # software.
-        # See: http://www.vmware.com/support/developer/vc-sdk/wssdk_5_0_releasenotes.html#knownissues
-        if version == "5.0.0":
-            self.soapclient = suds.client.Client("file:///usr/share/pyshared/pyvsphere/vSphere_5.0.0/vim25/vimService.wsdl")
-        else:
+        try:
             self.soapclient = suds.client.Client(url+"/vimService.wsdl")
+        except Exception, e:
+            if 'imported schema (urn:reflect)' in str(e):
+                assert False, 'WSDL file set incomplete on the vSphere server. See http://kb.vmware.com/kb/2010507'
+            else:
+                raise
             
         self.soapclient.set_options(location=url)
         self.soapclient.set_options(cachingpolicy=1)
