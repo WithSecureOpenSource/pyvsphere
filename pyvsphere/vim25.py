@@ -20,6 +20,7 @@ import logging
 import httplib
 import time
 import suds
+import urllib2
 
 class TimeoutError(Exception):
     def __init__(self, error):
@@ -497,6 +498,46 @@ class VirtualMachine(ManagedObject):
 
     def find_snapshots_by_name(self, name):
         return [snapshot for snapshot in self.list_snapshots() if snapshot.name == name]
+
+    def run_script_in_guest(self, script, username, password, shell='/bin/bash'):
+        """
+        Run a script in the guest VM
+
+        @param script: script text to run
+        @param username: existing user on the system
+        @param password: password of the user
+        @param shell: shell to execute the script, defaults to '/bin/bash'
+
+        @returns: process ID of the script run in the guest
+        """
+        assert hasattr(self.vim.service_content, 'guestOperationsManager'), 'vSphere version 5.0 or later is needed for guest operations'
+        auth = self.vim.create_object('NamePasswordAuthentication')
+        auth.username = username
+        auth.password = password
+        auth.interactiveSession = False
+        guest_manager = ManagedObject(mor=self.vim.service_content.guestOperationsManager, vim=self.vim, properties=['fileManager', 'processManager'])
+        temp_path = self.vim.invoke('CreateTemporaryFileInGuest', _this=guest_manager.fileManager, vm=self.mor, auth=auth, prefix='', suffix='')
+        attr = self.vim.create_object('GuestFileAttributes')
+        # Use default file attributes
+        attr.accessTime = None
+        attr.modificationTime = None
+        attr.symlinkTarget = None
+        upload_url = self.vim.invoke('InitiateFileTransferToGuest', _this=guest_manager.fileManager, vm=self.mor, auth=auth, guestFilePath=temp_path, fileAttributes=attr, fileSize=len(script), overwrite=True)
+        assert not '*' in upload_url, "'http://*/guestFile?id=1&token=1234'-style upload URLs are not supported yet: %r" % upload_url
+        # This hack makes urllib2 to issue a PUT request that vSphere wants for file uploads
+        opener = urllib2.build_opener(urllib2.HTTPHandler)
+        request = urllib2.Request(upload_url, data=script)
+        request.add_header('Content-Type', 'text/plain')
+        request.get_method = lambda: 'PUT'
+        url = opener.open(request)
+        program_spec = self.vim.create_object('GuestProgramSpec')
+        program_spec.arguments = temp_path
+        program_spec.envVariables = None
+        program_spec.programPath = shell
+        program_spec.workingDirectory = None
+        pid = self.vim.invoke('StartProgramInGuest', _this=guest_manager.processManager, vm=self.mor, auth=auth, spec=program_spec)
+        self.vim.invoke('DeleteFileInGuest', _this=guest_manager.fileManager, vm=self.mor, auth=auth, filePath=temp_path)
+        return pid
 
     def reconfig_vm(self, spec):
         """
