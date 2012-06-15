@@ -92,6 +92,10 @@ class VmOperations(object):
             return (hasattr(task, 'summary') and
                     getattr(task.summary.guest, 'ipAddress', None))
 
+        def guest_tool_running(task):
+            return (hasattr(task, 'summary') and
+                    getattr(task.summary.guest, 'toolsRunningStatus', None) == 'guestToolsRunning')
+
         def place_vm(base_vm, placement_strategy='random'):
             """ Place the VM to the available datastores either randomly or wherever there is most space """
             assert placement_strategy in ['random', 'most-space'], 'unknown placement strategy, must be either \'random\' or \'most-space\''
@@ -177,6 +181,39 @@ class VmOperations(object):
         clone.update_local_view(['summary'])
         assert clone.power_state() == 'poweredOn', '%s was not successfully powered on' % vm_name
         self.log.debug('CLONE(%s) POWERON DONE' % vm_name)
+
+        # Static IPV4 addresses can be specified for the interfaces in the VM.
+        # The configuration dictionary has the following structure:
+        #
+        # {'eth0': {'address': '192.168.2.2',
+        #           'netmask': '255.255.255.0'},
+        #  'gateway': '192.168.2.1',
+        #  'username': 'root',
+        #  'password': '<password>'}
+        #
+        network_config = instance.get('network')
+        if network_config:
+            self.log.debug('CLONE(%s) SETTING UP IP INTERFACES' % (vm_name))
+            username = instance.get('username')
+            password = instance.get('password')
+            assert username and password, "'cloud.username' and 'cloud.password' need to be specified for network interface setup"
+            script = ''
+            for interface,parameters in [(k,v) for k,v in network_config.iteritems() if k not in ['gateway', 'username', 'password']]:
+                address = parameters.get('address')
+                netmask = parameters.get('netmask')
+                assert address and netmask, "'address' and 'netmask' need to be specified for network interface configurations"
+                script += 'ifconfig %s %s netmask %s' % (interface, address, netmask)
+            gateway = network_config.get('gateway')
+            if gateway:
+                script += 'route add default gw %s' % gateway
+            self.log.debug('CLONE(%s) WAITING FOR GUEST TOOLS TO START' % (vm_name))
+            task = clone
+            tool_wait_started = time.time()
+            while not guest_tool_running(task):
+                task = (yield task)
+                assert time.time() - tool_wait_started < 60.0, 'guest tools have not started in 60 seconds'
+            self.log.debug('CLONE(%s) RUNNING INTERFACE SETUP SCRIPT IN VM' % (vm_name))
+            clone.run_script_in_guest(script, username, password)
 
         self.log.debug('CLONE(%s) WAITING FOR IP' % (vm_name))
         task = clone
