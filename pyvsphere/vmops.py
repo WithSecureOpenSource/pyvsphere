@@ -134,8 +134,10 @@ class VmOperations(object):
             placement_strategy = instance.get('placement', 'random')
             datastore=place_vm(base_vm, placement_strategy=placement_strategy)
 
+        cluster = instance.get('cluster', None)
+
         self.log.debug('CLONE(%s) CLONE STARTING' % vm_name)
-        task = base_vm.clone_vm_task(vm_name, linked_clone=False, datastore=datastore, resource_pool=instance.get('resource_pool', None), folder=instance.get('folder'))
+        task = base_vm.clone_vm_task(vm_name, linked_clone=False, datastore=datastore, resource_pool=instance.get('resource_pool', None), folder=instance.get('folder'), cluster=cluster)
         while not done(task):
             task = (yield task)
         assert task.info.state == 'success', 'CLONE(%s) failed with errror: %r Details: %r' % (vm_name, task.info.error.localizedMessage, task.info.error.fault)

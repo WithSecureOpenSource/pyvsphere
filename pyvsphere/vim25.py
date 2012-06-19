@@ -407,7 +407,7 @@ class VirtualMachine(ManagedObject):
         """
         return self.vim.wait_for_task(self.clone_vm_task(clonename, linked_clone))
 
-    def clone_vm_task(self, clonename=None, linked_clone=False, resource_pool=None, datastore=None, folder=None):
+    def clone_vm_task(self, clonename=None, linked_clone=False, resource_pool=None, datastore=None, folder=None, cluster=None):
         """
         Create a full or linked clone of the VM
 
@@ -415,6 +415,8 @@ class VirtualMachine(ManagedObject):
         @param linked_clone: set True for linked clones
         @param resource_pool: name or ManagedObject, defaults to inherit from the base VM
         @param datastore: name or ManagedObject, defaults to inherit from the base VM
+        @param folder: folder to place the VM
+        @param cluster: compute resource whose resource pool to place the VM
 
         @notes: The clone is created on the same data store and host as its parent
         """
@@ -431,7 +433,17 @@ class VirtualMachine(ManagedObject):
             assert clone_resource_pool, "resource pool %r not found" % resource_pool
             clone_resource_pool = clone_resource_pool.mor
         else:
-            clone_resource_pool = None
+            if cluster:
+                compute_resource = self.vim.find_entity_by_name('ComputeResource', cluster, ['name', 'resourcePool'])
+                assert compute_resource, 'cluster %r not found' % cluster
+                clone_resource_pool = compute_resource.resourcePool
+            else:
+                # If neither the resource pool nor the cluster has been specified try to autodetect
+                # by finding a single root resource pool. If none or more than one found, bail.
+                resource_pools = [x for x in self.vim.find_entities_by_type('ResourcePool', ['parent'])
+                                  if 'ComputeResource' in x.parent._type]
+                assert len(resource_pools) == 1, "root resource pool could not be determined unambiguously, specify the 'cluster' parameter"
+                clone_resource_pool = resource_pools[0].mor
         if folder:
             target_folder = self.vim.invoke('FindByInventoryPath', _this=self.vim.service_content.searchIndex, inventoryPath=folder)
             assert target_folder, "specified target folder %r not found" % folder
