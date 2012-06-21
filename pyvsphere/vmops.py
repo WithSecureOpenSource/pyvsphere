@@ -15,8 +15,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+import copy
 import logging
 import random
+import time
+import traceback
 
 from vim25 import ManagedObject
 
@@ -73,8 +76,7 @@ class VmOperations(object):
         Perform a full clone-poweron-snapshot cycle on the instance
 
         This is a generator function which is used in a co-operative
-        multitasking manner. See wait_instances() for an idea on its
-        usage.
+        multitasking manner. Typically this would be used through run_on_instances().
 
         @param instance: dict of the VM instance to create
         @param nuke_old: should an existing VM with the same be nuked
@@ -189,15 +191,33 @@ class VmOperations(object):
             task = (yield task)
         self.log.debug('CLONE(%s) SNAPSHOT DONE' % vm_name)
 
-    def revert_vm(self, instance):
+    def create_snapshot(self, instance, name=None, description=None, memory=False):
+        def done(task):
+            return (hasattr(task, 'info') and
+                    (task.info.state == 'success' or
+                     task.info.state == 'error'))
+
+        vm_name = instance['vm_name']
+        vm = instance['vm']
+        if not vm:
+            vm = self.vim.find_vm_by_name(vm_name, ['snapshot'])
+        assert vm, 'VM %s not found in vSphere, something is terribly wrong here' % vm_name
+
+        self.log.debug('CREATE-SNAPSHOT(%s) STARTING' % vm_name)
+        task = vm.create_snapshot_task(name, description, memory)
+        while not done(task):
+            task = (yield task)
+        self.log.debug('CREATE-SNAPSHOT(%s) DONE' % vm_name)
+
+    def revert_to_snapshot(self, instance, name=None, wait_for_ip=True):
         """
         Perform a quick snapshot revert on a VM instance
 
         This is a generator function which is used in a co-operative
-        multitasking manner. See wait_instances() for an idea on its
-        usage.
+        multitasking manner. Typically this would be used through run_on_instances().
 
         @param instance: dict of the VM instance to create
+        @param name: name of snapshot, revert to current snapshot if None
 
         @return: generator function
         """
@@ -217,25 +237,50 @@ class VmOperations(object):
         assert vm, 'VM %s not found in vSphere, something is terribly wrong here' % vm_name
 
         self.log.debug('REVERT(%s) STARTING' % vm_name)
-        task = vm.revert_to_current_snapshot_task()
+        if name:
+            snapshots = vm.find_snapshots_by_name(name)
+            assert len(snapshots) == 1, 'there must be one, and only one, snapshot with the name %r' % name
+            task = snapshots[0].snapshot.revert_to_snapshot_task()
+        else:
+            task = vm.revert_to_current_snapshot_task()
         while not done(task):
             task = (yield task)
         self.log.debug('REVERT(%s) DONE' % vm_name)
 
-        self.log.debug('REVERT(%s) WAITING FOR IP' % (vm_name))
-        task = vm
-        while not got_ip(task):
+        if wait_for_ip:
+            self.log.debug('REVERT(%s) WAITING FOR IP' % (vm_name))
+            task = vm
+            while not got_ip(task):
+                task = (yield task)
+            self.log.debug('REVERT(%s) GOT IP: %s' % (vm_name, task.summary.guest.ipAddress))
+            instance['ipv4'] = task.summary.guest.ipAddress
+
+    def remove_snapshot(self, instance, name=None):
+        def done(task):
+            return (hasattr(task, 'info') and
+                    (task.info.state == 'success' or
+                     task.info.state == 'error'))
+
+        vm_name = instance['vm_name']
+        vm = instance['vm']
+        if not vm:
+            vm = self.vim.find_vm_by_name(vm_name, ['snapshot'])
+        assert vm, 'VM %s not found in vSphere, something is terribly wrong here' % vm_name
+
+        self.log.debug('REMOVE-SNAPSHOT(%s) STARTING' % vm_name)
+        snapshots = vm.find_snapshots_by_name(name)
+        assert len(snapshots) == 1, 'there must be one, and only one, snapshot with the name %r' % name
+        task = snapshots[0].snapshot.remove_snapshot_task(remove_children=True)
+        while not done(task):
             task = (yield task)
-        self.log.debug('REVERT(%s) GOT IP: %s' % (vm_name, task.summary.guest.ipAddress))
-        instance['ipv4'] = task.summary.guest.ipAddress
+        self.log.debug('REMOVE-SNAPSHOT(%s) DONE' % vm_name)
 
     def delete_vm(self, instance):
         """
         Power off and delete a VM
 
         This is a generator function which is used in a co-operative
-        multitasking manner. See wait_instances() for an idea on its
-        usage.
+        multitasking manner. Typically this would be used through run_on_instances().
 
         @param instance: dict of the VM instance to delete
 
@@ -266,3 +311,73 @@ class VmOperations(object):
         while not done(task):
             task = (yield task)
         self.log.debug('DELETE(%s) DELETE DONE' % vm_name)
+
+    def update_vm(self, instance):
+        """
+        Get updated info from the VM instance
+
+        This is a generator function which is used in a co-operative
+        multitasking manner. Typically this would be used through run_on_instances().
+
+        @param instance: dict of the VM instance to update
+
+        @return: generator function
+        """
+        def done(task):
+            return (hasattr(task, 'summary') and
+                    getattr(task.summary.guest, 'ipAddress', None))
+
+        vm_name = instance['vm_name']
+        vm = instance.get('vm')
+        if not vm:
+            vm = self.vim.find_vm_by_name(vm_name)
+        assert vm, "VM %s not found in vSphere, something is terribly wrong here" % vm_name
+
+        self.log.debug("UPDATE-VM(%s) WAITING FOR IP" % (vm_name))
+        task = vm
+        while not done(task):
+            task = (yield task)
+        self.log.debug("UPDATE-VM(%s) GOT IP: %s" % (vm_name, task.summary.guest.ipAddress))
+        instance['ipv4'] = task.summary.guest.ipAddress
+
+    def run_on_instances(self, instances, operation, args=None):
+        """
+        Run the specified operations in parallel on all the instances
+
+        @param instances: a dict of instance_id -> instance_dict pairs
+        @param operation: function to run on each instance
+        @param args: dict of named arguments to pass to 'operation'
+
+        @note: sets an 'error' key in the instance with the traceback
+               in case of errors
+        """
+        if not args:
+            args = {}
+        ops = {}
+        tasks = {}
+        updated_instances = dict()
+        for instance_id,instance_dict in instances.iteritems():
+            instance_copy = copy.copy(instance_dict)
+            updated_instances[instance_id] = instance_copy
+            ops[instance_id] = operation(instance_copy, **args)
+            tasks[instance_id] = None
+        next_report = time.time() + 10.0
+        while ops:
+            if any(tasks.itervalues()):
+                _,tasks = self.vim.update_many_objects(tasks)
+            for instance_id in list(ops):
+                try:
+                    tasks[instance_id] = ops[instance_id].send(tasks[instance_id])
+                except StopIteration:
+                    del tasks[instance_id]
+                    del ops[instance_id]
+                except Exception, err:
+                    self.log.exception('%s failed', instance_id)
+                    updated_instances[instance_id]['error'] = traceback.format_exc()
+                    del tasks[instance_id]
+                    del ops[instance_id]
+            if time.time() >= next_report:
+                self.log.debug('%d instances still waiting', len(ops))
+                next_report = time.time() + 10.0
+            time.sleep(2)
+        return updated_instances
