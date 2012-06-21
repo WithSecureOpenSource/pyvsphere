@@ -20,6 +20,7 @@ import logging
 import httplib
 import time
 import suds
+import urllib2
 
 class TimeoutError(Exception):
     def __init__(self, error):
@@ -56,14 +57,13 @@ class Vim(object):
             logging.basicConfig(level=logging.INFO)
             logging.getLogger('suds').setLevel(logging.INFO)
 
-        # There are some missing schema files on vSphere Web Services SDK
-        # version 5.0.0, so we'll just bundle them with this piece of
-        # software.
-        # See: http://www.vmware.com/support/developer/vc-sdk/wssdk_5_0_releasenotes.html#knownissues
-        if version == "5.0.0":
-            self.soapclient = suds.client.Client("file:///usr/share/pyshared/pyvsphere/vSphere_5.0.0/vim25/vimService.wsdl")
-        else:
+        try:
             self.soapclient = suds.client.Client(url+"/vimService.wsdl")
+        except Exception, e:
+            if 'imported schema (urn:reflect)' in str(e):
+                assert False, 'WSDL file set incomplete on the vSphere server. See http://kb.vmware.com/kb/2010507'
+            else:
+                raise
             
         self.soapclient.set_options(location=url)
         self.soapclient.set_options(cachingpolicy=1)
@@ -407,7 +407,7 @@ class VirtualMachine(ManagedObject):
         """
         return self.vim.wait_for_task(self.clone_vm_task(clonename, linked_clone))
 
-    def clone_vm_task(self, clonename=None, linked_clone=False, resource_pool=None, datastore=None, folder=None):
+    def clone_vm_task(self, clonename=None, linked_clone=False, resource_pool=None, datastore=None, folder=None, cluster=None):
         """
         Create a full or linked clone of the VM
 
@@ -415,6 +415,8 @@ class VirtualMachine(ManagedObject):
         @param linked_clone: set True for linked clones
         @param resource_pool: name or ManagedObject, defaults to inherit from the base VM
         @param datastore: name or ManagedObject, defaults to inherit from the base VM
+        @param folder: folder to place the VM
+        @param cluster: compute resource whose resource pool to place the VM
 
         @notes: The clone is created on the same data store and host as its parent
         """
@@ -431,7 +433,17 @@ class VirtualMachine(ManagedObject):
             assert clone_resource_pool, "resource pool %r not found" % resource_pool
             clone_resource_pool = clone_resource_pool.mor
         else:
-            clone_resource_pool = None
+            if cluster:
+                compute_resource = self.vim.find_entity_by_name('ComputeResource', cluster, ['name', 'resourcePool'])
+                assert compute_resource, 'cluster %r not found' % cluster
+                clone_resource_pool = compute_resource.resourcePool
+            else:
+                # If neither the resource pool nor the cluster has been specified try to autodetect
+                # by finding a single root resource pool. If none or more than one found, bail.
+                resource_pools = [x for x in self.vim.find_entities_by_type('ResourcePool', ['parent'])
+                                  if 'ComputeResource' in x.parent._type]
+                assert len(resource_pools) == 1, "root resource pool could not be determined unambiguously, specify the 'cluster' parameter"
+                clone_resource_pool = resource_pools[0].mor
         if folder:
             target_folder = self.vim.invoke('FindByInventoryPath', _this=self.vim.service_content.searchIndex, inventoryPath=folder)
             assert target_folder, "specified target folder %r not found" % folder
@@ -498,6 +510,46 @@ class VirtualMachine(ManagedObject):
 
     def find_snapshots_by_name(self, name):
         return [snapshot for snapshot in self.list_snapshots() if snapshot.name == name]
+
+    def run_script_in_guest(self, script, username, password, shell='/bin/bash'):
+        """
+        Run a script in the guest VM
+
+        @param script: script text to run
+        @param username: existing user on the system
+        @param password: password of the user
+        @param shell: shell to execute the script, defaults to '/bin/bash'
+
+        @returns: process ID of the script run in the guest
+        """
+        assert hasattr(self.vim.service_content, 'guestOperationsManager'), 'vSphere version 5.0 or later is needed for guest operations'
+        auth = self.vim.create_object('NamePasswordAuthentication')
+        auth.username = username
+        auth.password = password
+        auth.interactiveSession = False
+        guest_manager = ManagedObject(mor=self.vim.service_content.guestOperationsManager, vim=self.vim, properties=['fileManager', 'processManager'])
+        temp_path = self.vim.invoke('CreateTemporaryFileInGuest', _this=guest_manager.fileManager, vm=self.mor, auth=auth, prefix='', suffix='')
+        attr = self.vim.create_object('GuestFileAttributes')
+        # Use default file attributes
+        attr.accessTime = None
+        attr.modificationTime = None
+        attr.symlinkTarget = None
+        upload_url = self.vim.invoke('InitiateFileTransferToGuest', _this=guest_manager.fileManager, vm=self.mor, auth=auth, guestFilePath=temp_path, fileAttributes=attr, fileSize=len(script), overwrite=True)
+        assert not '*' in upload_url, "'http://*/guestFile?id=1&token=1234'-style upload URLs are not supported yet: %r" % upload_url
+        # This hack makes urllib2 to issue a PUT request that vSphere wants for file uploads
+        opener = urllib2.build_opener(urllib2.HTTPHandler)
+        request = urllib2.Request(upload_url, data=script)
+        request.add_header('Content-Type', 'text/plain')
+        request.get_method = lambda: 'PUT'
+        url = opener.open(request)
+        program_spec = self.vim.create_object('GuestProgramSpec')
+        program_spec.arguments = temp_path
+        program_spec.envVariables = None
+        program_spec.programPath = shell
+        program_spec.workingDirectory = None
+        pid = self.vim.invoke('StartProgramInGuest', _this=guest_manager.processManager, vm=self.mor, auth=auth, spec=program_spec)
+        self.vim.invoke('DeleteFileInGuest', _this=guest_manager.fileManager, vm=self.mor, auth=auth, filePath=temp_path)
+        return pid
 
     def reconfig_vm(self, spec):
         """

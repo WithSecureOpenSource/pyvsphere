@@ -68,7 +68,8 @@ class VmTool(object):
                             base_vm_name=options.base_image,
                             datastore_filter=options.datastore_filter,
                             folder=options.folder,
-                            resource_pool=options.resource_pool)
+                            resource_pool=options.resource_pool,
+                            cluster=options.cluster)
             instances[vm_name] = instance
         args = {'nuke_old': True}
         return self.vmops.run_on_instances(instances, self.vmops.clone_vm, args)
@@ -157,6 +158,8 @@ def main():
                       help='destination folder for the clones, in the format of Data Center/vm/Any/Folder/Name')
     parser.add_option('--resource-pool', dest='resource_pool', default='',
                       help='resource pool for the clones. Defaults to the root pool if not specified.')
+    parser.add_option('--cluster', dest='cluster', default=None,
+                      help='cluster compute resource for the cloned VMs')
     parser.add_option('--username', dest='vi_username', default=None,
                       help='vSphere user name')
     parser.add_option('--password', dest='vi_password', default=None,
