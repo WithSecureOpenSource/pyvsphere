@@ -64,7 +64,7 @@ class Vim(object):
                 assert False, 'WSDL file set incomplete on the vSphere server. See http://kb.vmware.com/kb/2010507'
             else:
                 raise
-            
+
         self.soapclient.set_options(location=url)
         self.soapclient.set_options(cachingpolicy=1)
         self.service_instance = ManagedObjectReference(_type='ServiceInstance',

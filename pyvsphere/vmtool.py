@@ -182,7 +182,7 @@ def main():
     assert options.vm_name, 'VM name needs to be specified with --vm_name <vm-name>'
 
     vmtool = VmTool(options.vi_url, options.vi_username, options.vi_password, options.vi_version, options.verbose)
-    
+
     if options.clone:
         vmtool.clone_vms(options)
 
