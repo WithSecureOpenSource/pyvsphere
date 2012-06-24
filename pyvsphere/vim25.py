@@ -23,22 +23,16 @@ import suds
 import urllib2
 
 class TimeoutError(Exception):
-    def __init__(self, error):
-        self.error = error
-    def __str__(self):
-        return repr(self.error)
+    pass
 
 class ObjectNotFoundError(Exception):
-    def __init__(self, error):
-        self.error = error
-    def __str__(self):
-        return repr(self.error)
+    pass
 
-class TaskFailed(Exception):
-    def __init__(self, error):
-        self.error = error
-    def __str__(self):
-        return repr(self.error)
+class TaskFailedError(Exception):
+    pass
+
+class InvalidParameterError(Exception):
+    pass
 
 class Vim(object):
     """
@@ -435,18 +429,21 @@ class VirtualMachine(ManagedObject):
         else:
             if cluster:
                 compute_resource = self.vim.find_entity_by_name('ComputeResource', cluster, ['name', 'resourcePool'])
-                assert compute_resource, 'cluster %r not found' % cluster
+                if not compute_resource:
+                    raise InvalidParameter("cluster %r not found" % cluster)
                 clone_resource_pool = compute_resource.resourcePool
             else:
                 # If neither the resource pool nor the cluster has been specified try to autodetect
                 # by finding a single root resource pool. If none or more than one found, bail.
                 resource_pools = [x for x in self.vim.find_entities_by_type('ResourcePool', ['parent'])
                                   if 'ComputeResource' in x.parent._type]
-                assert len(resource_pools) == 1, "root resource pool could not be determined unambiguously, specify the 'cluster' parameter"
+                if len(resource_pools) != 1:
+                    raise InvalidParameter("root resource pool could not be determined unambiguously, specify the 'cluster' parameter")
                 clone_resource_pool = resource_pools[0].mor
         if folder:
             target_folder = self.vim.invoke('FindByInventoryPath', _this=self.vim.service_content.searchIndex, inventoryPath=folder)
-            assert target_folder, "specified target folder %r not found" % folder
+            if not target_folder:
+                raise InvalidParameter("specified target folder %r not found" % folder)
         else:
             target_folder = self.parent
 
