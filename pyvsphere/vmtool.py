@@ -24,7 +24,7 @@ import optparse
 import sys
 import time
 
-from vim25 import Vim, ManagedObject, ManagedObjectReference, VirtualMachineSnapshot
+from vim25 import Vim, ManagedObject, ManagedObjectReference, VirtualMachineSnapshot, InvalidParameterError
 from vmops import VmOperations
 
 
@@ -111,7 +111,8 @@ class VmTool(object):
     def revert_to_snapshot(self, options):
         vm = self.vim.find_vm_by_name(options.vm_name)
         snapshotinfos = vm.find_snapshots_by_name(options.revert_to_snapshot)
-        assert len(snapshotinfos) == 1, 'there are multiple snapshots with the name %r' % options.revert_to_snapshot
+        if len(snapshotinfos) != 1:
+            raise InvalidParameterError('there are multiple snapshots with the name %r' % options.revert_to_snapshot)
         snapshotinfos[0].snapshot.revert_to_snapshot()
 
 def main():
@@ -182,7 +183,7 @@ def main():
     assert options.vm_name, 'VM name needs to be specified with --vm_name <vm-name>'
 
     vmtool = VmTool(options.vi_url, options.vi_username, options.vi_password, options.vi_version, options.verbose)
-    
+
     if options.clone:
         vmtool.clone_vms(options)
 

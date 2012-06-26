@@ -21,7 +21,7 @@ import random
 import time
 import traceback
 
-from vim25 import ManagedObject
+from vim25 import ManagedObject, InvalidParameterError, TimeoutError, TaskFailedError
 
 class VmOperations(object):
     """
@@ -66,7 +66,8 @@ class VmOperations(object):
         """ Find and return the list of available datastores for a ClusterComputeResource """
         if clustername not in self._cluster_datastore_cache:
             ccr = self.vim.find_entity_by_name('ClusterComputeResource', clustername, ['name', 'datastore'])
-            assert ccr, 'specified ClusterComputeResource %r not found' % clustername
+            if not ccr:
+                raise InvalidParameterError('specified ClusterComputeResource %r not found' % clustername)
             datastores = [ManagedObject(x, self.vim, ['name', 'summary', 'info']) for x in ccr.datastore]
             self._cluster_datastore_cache[clustername] = datastores
         return self._cluster_datastore_cache.get(clustername, [])
@@ -101,7 +102,8 @@ class VmOperations(object):
             assert placement_strategy in ['random', 'most-space'], 'unknown placement strategy, must be either \'random\' or \'most-space\''
             # Make a list of datastores that have enough space and sort it by free space
             possible_targets = sorted([x for x in base_vm.available_datastores if x.summary.freeSpace > base_vm.size], key=lambda x: x.summary.freeSpace, reverse=True)
-            assert len(possible_targets) > 0, 'no suitable datastore found. Are they all low on space?'
+            if len(possible_targets) == 0:
+                raise InvalidParameterError('no suitable datastore found. Are they all low on space?')
             if placement_strategy == 'random':
                 target = random.choice(possible_targets)
             if placement_strategy == 'most-space':
@@ -111,7 +113,8 @@ class VmOperations(object):
 
         vm_name = instance['vm_name']
         base_vm = self._get_base_vm(instance)
-        assert base_vm, 'base VM %s not found, check the cloud.base_vm_name property for %s' % (instance['base_vm_name'], vm_name)
+        if not base_vm:
+            raise InvalidParameterError('base VM %s not found, check the cloud.base_vm_name property for %s' % (instance['base_vm_name'], vm_name))
 
         if nuke_old:
             clone = self.vim.find_vm_by_name(vm_name, ['summary'])
@@ -140,10 +143,12 @@ class VmOperations(object):
         task = base_vm.clone_vm_task(vm_name, linked_clone=False, datastore=datastore, resource_pool=instance.get('resource_pool', None), folder=instance.get('folder'), cluster=cluster)
         while not done(task):
             task = (yield task)
-        assert task.info.state == 'success', 'CLONE(%s) failed with errror: %r Details: %r' % (vm_name, task.info.error.localizedMessage, task.info.error.fault)
+        if task.info.state != 'success':
+            raise TaskFailedError('CLONE(%s) failed with error: %r Details: %r' % (vm_name, task.info.error.localizedMessage, task.info.error.fault))
         self.log.debug('CLONE(%s) CLONE DONE' % vm_name)
 
         clone = self.vim.find_vm_by_name(vm_name)
+        assert clone, 'Could not find vm %s after cloning. Must not happen. Ever.' % (vm_name)
 
         # Reconfigure the VM hardware as specified
         hardware = instance.get('hardware', None)
@@ -175,14 +180,13 @@ class VmOperations(object):
                 task = (yield task)
             self.log.debug('CLONE(%s) RECONFIG_VM DONE' % vm_name)
 
-        assert clone, 'Could not clone vm %s' % (vm_name)
-
         self.log.debug('CLONE(%s) POWERON STARTING' % vm_name)
         task = clone.power_on_task()
         while not done(task):
             task = (yield task)
         clone.update_local_view(['summary'])
-        assert clone.power_state() == 'poweredOn', '%s was not successfully powered on' % vm_name
+        if clone.power_state() != 'poweredOn':
+            raise TaskFailedError('%s was not successfully powered on' % vm_name)
         self.log.debug('CLONE(%s) POWERON DONE' % vm_name)
 
         # Static IPV4 addresses can be specified for the interfaces in the VM.
@@ -199,12 +203,14 @@ class VmOperations(object):
             self.log.debug('CLONE(%s) SETTING UP IP INTERFACES' % (vm_name))
             username = instance.get('username')
             password = instance.get('password')
-            assert username and password, "'cloud.username' and 'cloud.password' need to be specified for network interface setup"
+            if not username or not password:
+                raise InvalidParameterError("'cloud.username' and 'cloud.password' need to be specified for network interface setup")
             script = ''
             for interface,parameters in [(k,v) for k,v in network_config.iteritems() if k not in ['gateway', 'username', 'password']]:
                 address = parameters.get('address')
                 netmask = parameters.get('netmask')
-                assert address and netmask, "'address' and 'netmask' need to be specified for network interface configurations"
+                if not address or not netmask:
+                    raise InvalidParameterError("'address' and 'netmask' need to be specified for network interface configurations")
                 script += 'ifconfig %s %s netmask %s' % (interface, address, netmask)
             gateway = network_config.get('gateway')
             if gateway:
@@ -214,7 +220,8 @@ class VmOperations(object):
             tool_wait_started = time.time()
             while not guest_tool_running(task):
                 task = (yield task)
-                assert time.time() - tool_wait_started < 60.0, 'guest tools have not started in 60 seconds'
+                if time.time() - tool_wait_started > 60.0:
+                    raise TimeoutError('guest tools have not started in 60 seconds')
             self.log.debug('CLONE(%s) RUNNING INTERFACE SETUP SCRIPT IN VM' % (vm_name))
             clone.run_script_in_guest(script, username, password)
 
@@ -241,7 +248,8 @@ class VmOperations(object):
         vm = instance['vm']
         if not vm:
             vm = self.vim.find_vm_by_name(vm_name, ['snapshot'])
-        assert vm, 'VM %s not found in vSphere, something is terribly wrong here' % vm_name
+        if not vm:
+            raise InvalidParameterError('VM %s not found in vSphere, something is terribly wrong here' % vm_name)
 
         self.log.debug('CREATE-SNAPSHOT(%s) STARTING' % vm_name)
         task = vm.create_snapshot_task(name, description, memory)
@@ -274,12 +282,14 @@ class VmOperations(object):
         vm = instance['vm']
         if not vm:
             vm = self.vim.find_vm_by_name(vm_name)
-        assert vm, 'VM %s not found in vSphere, something is terribly wrong here' % vm_name
+        if not vm:
+            raise InvalidParameterError('VM %s not found in vSphere, something is terribly wrong here' % vm_name)
 
         self.log.debug('REVERT(%s) STARTING' % vm_name)
         if name:
             snapshots = vm.find_snapshots_by_name(name)
-            assert len(snapshots) == 1, 'there must be one, and only one, snapshot with the name %r' % name
+            if len(snapshots) != 1:
+                raise InvalidParameterError('there must be one, and only one, snapshot with the name %r' % name)
             task = snapshots[0].snapshot.revert_to_snapshot_task()
         else:
             task = vm.revert_to_current_snapshot_task()
@@ -305,11 +315,13 @@ class VmOperations(object):
         vm = instance['vm']
         if not vm:
             vm = self.vim.find_vm_by_name(vm_name, ['snapshot'])
-        assert vm, 'VM %s not found in vSphere, something is terribly wrong here' % vm_name
+        if not vm:
+            raise InvalidParameterError('VM %s not found in vSphere, something is terribly wrong here' % vm_name)
 
         self.log.debug('REMOVE-SNAPSHOT(%s) STARTING' % vm_name)
         snapshots = vm.find_snapshots_by_name(name)
-        assert len(snapshots) == 1, 'there must be one, and only one, snapshot with the name %r' % name
+        if len(snapshots) != 1:
+            raise InvalidParameterError('there must be one, and only one, snapshot with the name %r' % name)
         task = snapshots[0].snapshot.remove_snapshot_task(remove_children=True)
         while not done(task):
             task = (yield task)
@@ -335,7 +347,8 @@ class VmOperations(object):
         vm = instance['vm']
         if not vm:
             vm = self.vim.find_vm_by_name(vm_name, ['summary'])
-        assert vm, 'VM %s not found in vSphere, something is terribly wrong here' % vm_name
+        if not vm:
+            raise InvalidParameterError('VM %s not found in vSphere, something is terribly wrong here' % vm_name)
 
         if vm.power_state() == 'poweredOn':
             self.log.debug('DELETE(%s) POWEROFF STARTING' % vm_name)
@@ -343,7 +356,8 @@ class VmOperations(object):
             while not done(task):
                 task = (yield task)
             vm.update_local_view(['summary'])
-            assert vm.power_state() == 'poweredOff', '%s was not successfully powered off' % vm_name
+            if vm.power_state() != 'poweredOff':
+                raise TaskFailedError('%s was not successfully powered off' % vm_name)
             self.log.debug('DELETE(%s) POWEROFF DONE' % vm_name)
 
         self.log.debug('DELETE(%s) DELETE STARTING' % vm_name)
@@ -371,7 +385,8 @@ class VmOperations(object):
         vm = instance.get('vm')
         if not vm:
             vm = self.vim.find_vm_by_name(vm_name)
-        assert vm, "VM %s not found in vSphere, something is terribly wrong here" % vm_name
+        if not vm:
+            raise InvalidParameterError('VM %s not found in vSphere, something is terribly wrong here' % vm_name)
 
         self.log.debug("UPDATE-VM(%s) WAITING FOR IP" % (vm_name))
         task = vm
@@ -411,6 +426,8 @@ class VmOperations(object):
                 except StopIteration:
                     del tasks[instance_id]
                     del ops[instance_id]
+                except KeyboardInterrupt:
+                    raise
                 except Exception, err:
                     self.log.exception('%s failed', instance_id)
                     updated_instances[instance_id]['error'] = traceback.format_exc()
