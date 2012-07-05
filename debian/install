@@ -1,9 +1,0 @@
-pyvsphere/vim25/core-types.xsd usr/share/pyshared/pyvsphere/vSphere_5.0.0/vim25
-pyvsphere/vim25/query-types.xsd usr/share/pyshared/pyvsphere/vSphere_5.0.0/vim25
-pyvsphere/vim25/reflect-types.xsd usr/share/pyshared/pyvsphere/vSphere_5.0.0/vim25
-pyvsphere/vim25/vimService.wsdl usr/share/pyshared/pyvsphere/vSphere_5.0.0/vim25
-pyvsphere/vim25/vim.wsdl usr/share/pyshared/pyvsphere/vSphere_5.0.0/vim25
-pyvsphere/vim25/query-messagetypes.xsd usr/share/pyshared/pyvsphere/vSphere_5.0.0/vim25
-pyvsphere/vim25/reflect-messagetypes.xsd usr/share/pyshared/pyvsphere/vSphere_5.0.0/vim25
-pyvsphere/vim25/vim-messagetypes.xsd usr/share/pyshared/pyvsphere/vSphere_5.0.0/vim25
-pyvsphere/vim25/vim-types.xsd usr/share/pyshared/pyvsphere/vSphere_5.0.0/vim25
