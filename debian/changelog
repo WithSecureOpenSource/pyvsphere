@@ -1,3 +1,16 @@
+python-vsphere (0.6.1-1) UNRELEASED; urgency=low
+
+  * pyvsphere: replace asserts with custom exceptions where they are more appropriate
+  * pyvsphere: assign VM to a proper root resource pool in case it is unspecified
+  * vmops: terminate with an error message if clone_vm_task() fails
+  * vmops: support for setting up network interfaces after cloning
+  * vim25: add run_script_in_guest() to run a script in the guest VM
+  * vim25: detect broken vSphere 5.0 installations and suggest a fix
+  * vmops: add create/remove/revert_to snapshot operations
+  * pyvsphere: add snapshot management operations
+
+ -- Mika Eloranta <ext-mika.eloranta@f-secure.com>  Thu, 05 Jul 2012 17:43:57 +0300
+
 python-vsphere (0.6.0-1) UNRELEASED; urgency=low
 
   * Add vmops module
