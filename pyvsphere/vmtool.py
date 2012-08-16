@@ -59,7 +59,7 @@ class VmTool(object):
             yield options.vm_name
         else:
             for i in range(options.count):
-                 yield '%s-%02d' % (options.vm_name, i)
+                yield '%s-%02d' % (options.vm_name, i)
 
     def clone_vms(self, options):
         instances = dict()
