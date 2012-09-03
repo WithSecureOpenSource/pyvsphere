@@ -24,7 +24,7 @@ import optparse
 import sys
 import time
 
-from vim25 import Vim, ManagedObject, ManagedObjectReference, VirtualMachineSnapshot, InvalidParameterError
+from vim25 import Vim, VirtualMachineSnapshot, InvalidParameterError
 from vmops import VmOperations
 
 
