@@ -94,7 +94,7 @@ class Vim(object):
             if task.info.state == 'success':
                 return True
             elif task.info.state == 'error':
-                raise TaskFailed(error=task.info.error.localizedMessage)
+                raise TaskFailedError(error=task.info.error.localizedMessage)
             time.sleep(1)
             if time.time()-start_time > self.task_timeout:
                 raise TimeoutError, "task timed out after %d seconds" % self.task_timeout
@@ -113,7 +113,7 @@ class Vim(object):
             if task.info.state == 'success':
                 return True
             elif task.info.state == 'error':
-                raise TaskFailed(error=task.info.error.localizedMessage)
+                raise TaskFailedError(error=task.info.error.localizedMessage)
             time.sleep(1)
             if time.time()-start_time > self.task_timeout:
                 raise TimeoutError, "task timed out after %d seconds" % self.task
@@ -430,7 +430,7 @@ class VirtualMachine(ManagedObject):
             if cluster:
                 compute_resource = self.vim.find_entity_by_name('ComputeResource', cluster, ['name', 'resourcePool'])
                 if not compute_resource:
-                    raise InvalidParameter("cluster %r not found" % cluster)
+                    raise InvalidParameterError("cluster %r not found" % cluster)
                 clone_resource_pool = compute_resource.resourcePool
             else:
                 # If neither the resource pool nor the cluster has been specified try to autodetect
@@ -438,12 +438,12 @@ class VirtualMachine(ManagedObject):
                 resource_pools = [x for x in self.vim.find_entities_by_type('ResourcePool', ['parent'])
                                   if 'ComputeResource' in x.parent._type]
                 if len(resource_pools) != 1:
-                    raise InvalidParameter("root resource pool could not be determined unambiguously, specify the 'cluster' parameter")
+                    raise InvalidParameterError("root resource pool could not be determined unambiguously, specify the 'cluster' parameter")
                 clone_resource_pool = resource_pools[0].mor
         if folder:
             target_folder = self.vim.invoke('FindByInventoryPath', _this=self.vim.service_content.searchIndex, inventoryPath=folder)
             if not target_folder:
-                raise InvalidParameter("specified target folder %r not found" % folder)
+                raise InvalidParameterError("specified target folder %r not found" % folder)
         else:
             target_folder = self.parent
 

@@ -24,7 +24,7 @@ import optparse
 import sys
 import time
 
-from vim25 import Vim, ManagedObject, ManagedObjectReference, VirtualMachineSnapshot, InvalidParameterError
+from vim25 import Vim, VirtualMachineSnapshot, InvalidParameterError
 from vmops import VmOperations
 
 
@@ -59,7 +59,7 @@ class VmTool(object):
             yield options.vm_name
         else:
             for i in range(options.count):
-                 yield '%s-%02d' % (options.vm_name, i)
+                yield '%s-%02d' % (options.vm_name, i)
 
     def clone_vms(self, options):
         instances = dict()
