@@ -327,6 +327,49 @@ class VmOperations(object):
             task = (yield task)
         self.log.debug('REMOVE-SNAPSHOT(%s) DONE' % vm_name)
 
+    def power_on_off_vm(self, instance, off=False):
+        """Power on/off a VM
+
+        This is a generator function which is used in a co-operative
+        multitasking manner. Typically this would be used through run_on_instances().
+
+        @param instance: dict of the VM instance to power on/off
+
+        @return: generator function
+        """
+        def done(task):
+            return (hasattr(task, 'info') and
+                    (task.info.state == 'success' or
+                     task.info.state == 'error'))
+
+        vm_name = instance['vm_name']
+        vm = instance['vm']
+        if not vm:
+            vm = self.vim.find_vm_by_name(vm_name, ['summary'])
+        if not vm:
+            raise InvalidParameterError('VM %s not found in vSphere, something is terribly wrong here' % vm_name)
+
+        if vm.power_state() == 'poweredOff' and not off:
+            self.log.debug('POWERON(%s) STARTING', vm_name)
+            task = vm.power_on_task()
+            while not done(task):
+                task = (yield task)
+            vm.update_local_view(['summary'])
+            if vm.power_state() != 'poweredOn':
+                raise TaskFailedError('%s was not successfully powered on', vm_name)
+            self.log.debug('POWERON(%s) DONE', vm_name)
+        elif vm.power_state() == 'poweredOn' and off:
+            self.log.debug('POWEROFF(%s) STARTING', vm_name)
+            task = vm.power_off_task()
+            while not done(task):
+                task = (yield task)
+            vm.update_local_view(['summary'])
+            if vm.power_state() != 'poweredOff':
+                raise TaskFailedError('%s was not successfully powered off', vm_name)
+            self.log.debug('POWEROFF(%s) DONE', vm_name)
+        else:
+            self.log.debug('VM %s is already %s', vm_name, 'off' if off else 'on')
+
     def delete_vm(self, instance):
         """
         Power off and delete a VM
@@ -351,14 +394,14 @@ class VmOperations(object):
             raise InvalidParameterError('VM %s not found in vSphere, something is terribly wrong here' % vm_name)
 
         if vm.power_state() == 'poweredOn':
-            self.log.debug('DELETE(%s) POWEROFF STARTING' % vm_name)
+            self.log.debug('DELETE(%s) POWEROFF STARTING', vm_name)
             task = vm.power_off_task()
             while not done(task):
                 task = (yield task)
             vm.update_local_view(['summary'])
             if vm.power_state() != 'poweredOff':
-                raise TaskFailedError('%s was not successfully powered off' % vm_name)
-            self.log.debug('DELETE(%s) POWEROFF DONE' % vm_name)
+                raise TaskFailedError('%s was not successfully powered off', vm_name)
+            self.log.debug('DELETE(%s) POWEROFF DONE', vm_name)
 
         self.log.debug('DELETE(%s) DELETE STARTING' % vm_name)
         task = vm.delete_vm_task()
