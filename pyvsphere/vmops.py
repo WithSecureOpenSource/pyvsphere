@@ -472,7 +472,7 @@ class VmOperations(object):
                 except KeyboardInterrupt:
                     raise
                 except Exception, err:
-                    self.log.exception('%s failed', instance_id)
+                    self.log.error('%s failed', instance_id)
                     updated_instances[instance_id]['error'] = traceback.format_exc()
                     del tasks[instance_id]
                     del ops[instance_id]
