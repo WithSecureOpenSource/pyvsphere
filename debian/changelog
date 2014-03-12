@@ -1,3 +1,11 @@
+python-vsphere (0.6.3-1) UNRELEASED; urgency=low
+
+  * vmops: Support power on/off for instances
+  * vmops: Hide traceback in handled exception
+  * vmops: Option to disable create snapshot when vm is cloned
+
+ -- Pawel Kowalak <ext-pawel.kowalak@f-secure.com>  Tue, 09 Oct 2012 14:49:21 +0200
+
 python-vsphere (0.6.2-1) UNRELEASED; urgency=low
 
   * vim25: use correct exception names for InvalidParameterError and TaskFailedError
