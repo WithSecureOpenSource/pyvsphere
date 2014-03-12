@@ -20,6 +20,7 @@ import logging
 import random
 import time
 import traceback
+import os
 
 from vim25 import ManagedObject, InvalidParameterError, TimeoutError, TaskFailedError
 
@@ -251,11 +252,12 @@ class VmOperations(object):
         if not vm:
             raise InvalidParameterError('VM %s not found in vSphere, something is terribly wrong here' % vm_name)
 
-        self.log.debug('CREATE-SNAPSHOT(%s) STARTING' % vm_name)
-        task = vm.create_snapshot_task(name, description, memory)
-        while not done(task):
-            task = (yield task)
-        self.log.debug('CREATE-SNAPSHOT(%s) DONE' % vm_name)
+        if not os.environ.get("CLONE_WITHOUT_SNAPSHOT"):
+            self.log.debug('CREATE-SNAPSHOT(%s) STARTING' % vm_name)
+            task = vm.create_snapshot_task(name, description, memory)
+            while not done(task):
+                task = (yield task)
+            self.log.debug('CREATE-SNAPSHOT(%s) DONE' % vm_name)
 
     def revert_to_snapshot(self, instance, name=None, wait_for_ip=True):
         """
